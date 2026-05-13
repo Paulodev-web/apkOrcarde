@@ -1,20 +1,18 @@
 import { zodResolver } from '@hookform/resolvers/zod';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Eye, EyeOff } from 'lucide-react-native';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { z } from 'zod';
 
-import { signInManager } from '@/lib/auth/session';
+import { Button } from '@/design-system/primitives/Button';
+import { Text } from '@/design-system/primitives/Text';
+import { TextInput } from '@/design-system/primitives/TextInput';
+import { colors, gradients } from '@/design-system/tokens/colors';
+import { spacing } from '@/design-system/tokens/spacing';
+import { signInApkUser } from '@/lib/auth/session';
 import { captureBreadcrumb } from '@/lib/sentry';
 import { useSessionStore } from '@/stores/session.store';
 
@@ -28,6 +26,7 @@ type FormValues = z.infer<typeof schema>;
 export default function LoginScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [globalError, setGlobalError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
   const setSession = useSessionStore((s) => s.setSession);
 
   const {
@@ -43,7 +42,7 @@ export default function LoginScreen() {
     setSubmitting(true);
     setGlobalError(null);
     captureBreadcrumb('auth', 'login_submit');
-    const result = await signInManager(values.email.trim(), values.password);
+    const result = await signInApkUser(values.email.trim(), values.password);
     setSubmitting(false);
 
     if (!result.success) {
@@ -56,87 +55,78 @@ export default function LoginScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <KeyboardAvoidingView
-        style={styles.container}
+        style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>OrcaRede</Text>
-          <Text style={styles.subtitle}>Acesso do gerente de obra</Text>
+        <View style={styles.hero}>
+          <LinearGradient colors={[...gradients.hero]} style={styles.heroGradient}>
+            <Image
+              source={require('../../assets/OnEngenharia.webp')}
+              style={styles.logo}
+              accessibilityIgnoresInvertColors
+            />
+            <Text variant="heading1" color="textInverse" style={styles.heroTitle}>
+              OrçaRede
+            </Text>
+            <Text variant="bodyLarge" color="textInverse" style={styles.heroSubtitle}>
+              Gestão de redes elétricas
+            </Text>
+          </LinearGradient>
         </View>
 
         <View style={styles.form}>
-          <Text style={styles.label}>Email</Text>
           <Controller
             control={control}
             name="email"
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                style={[styles.input, errors.email ? styles.inputError : null]}
+                label="Email"
+                value={value}
+                onChangeText={onChange}
+                onBlur={onBlur}
                 autoCapitalize="none"
-                autoComplete="email"
-                autoCorrect={false}
                 keyboardType="email-address"
                 placeholder="seu@email.com"
-                placeholderTextColor="#8a94a6"
-                value={value}
-                onBlur={onBlur}
-                onChangeText={onChange}
+                error={errors.email?.message}
                 editable={!submitting}
               />
             )}
           />
-          {errors.email ? <Text style={styles.fieldError}>{errors.email.message}</Text> : null}
-
-          <Text style={[styles.label, styles.labelSpacing]}>Senha</Text>
+          <View style={styles.gapMd} />
           <Controller
             control={control}
             name="password"
             render={({ field: { onChange, onBlur, value } }) => (
               <TextInput
-                style={[styles.input, errors.password ? styles.inputError : null]}
-                autoCapitalize="none"
-                autoComplete="current-password"
-                autoCorrect={false}
-                secureTextEntry
-                placeholder="Sua senha"
-                placeholderTextColor="#8a94a6"
+                label="Senha"
                 value={value}
-                onBlur={onBlur}
                 onChangeText={onChange}
+                onBlur={onBlur}
+                secureTextEntry={!showPassword}
+                placeholder="Sua senha"
+                error={errors.password?.message}
+                rightIcon={showPassword ? EyeOff : Eye}
+                onRightIconPress={() => setShowPassword((s) => !s)}
                 editable={!submitting}
               />
             )}
           />
-          {errors.password ? (
-            <Text style={styles.fieldError}>{errors.password.message}</Text>
-          ) : null}
-
+          <View style={styles.gapXl} />
           {globalError ? (
-            <View style={styles.errorBanner}>
-              <Text style={styles.errorBannerText}>{globalError}</Text>
-            </View>
+            <Text variant="caption" color="danger" style={styles.err}>
+              {globalError}
+            </Text>
           ) : null}
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.submit,
-              submitting ? styles.submitDisabled : null,
-              pressed && !submitting ? styles.submitPressed : null,
-            ]}
-            onPress={handleSubmit(onSubmit)}
+          <Button
+            variant="primary"
+            size="lg"
+            loading={submitting}
             disabled={submitting}
-            accessibilityRole="button"
+            onPress={handleSubmit(onSubmit)}
+            style={styles.fullBtn}
           >
-            {submitting ? (
-              <ActivityIndicator color="#ffffff" />
-            ) : (
-              <Text style={styles.submitText}>Entrar</Text>
-            )}
-          </Pressable>
-
-          <Text style={styles.footerHint}>
-            Sua senha foi enviada pelo engenheiro responsavel pela obra.
-          </Text>
+            Entrar
+          </Button>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -146,92 +136,48 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
   },
-  container: {
+  flex: {
     flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 32,
   },
-  header: {
-    alignItems: 'flex-start',
-    marginBottom: 40,
+  hero: {
+    flex: 1,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#0a3a82',
-  },
-  subtitle: {
-    marginTop: 8,
-    fontSize: 16,
-    color: '#3b4452',
-  },
-  form: {
-    width: '100%',
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1c1f24',
-    marginBottom: 8,
-  },
-  labelSpacing: {
-    marginTop: 16,
-  },
-  input: {
-    minHeight: 48,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#cfd6e0',
-    paddingHorizontal: 14,
-    fontSize: 16,
-    color: '#1c1f24',
-    backgroundColor: '#f6f8fb',
-  },
-  inputError: {
-    borderColor: '#c0392b',
-  },
-  fieldError: {
-    marginTop: 6,
-    color: '#c0392b',
-    fontSize: 13,
-  },
-  errorBanner: {
-    marginTop: 16,
-    padding: 12,
-    borderRadius: 8,
-    backgroundColor: '#fdecea',
-    borderLeftWidth: 4,
-    borderLeftColor: '#c0392b',
-  },
-  errorBannerText: {
-    color: '#7a1f17',
-    fontSize: 14,
-  },
-  submit: {
-    marginTop: 24,
-    minHeight: 52,
-    borderRadius: 10,
-    backgroundColor: '#0a3a82',
+  heroGradient: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: spacing.xxl,
   },
-  submitDisabled: {
-    opacity: 0.7,
+  logo: {
+    width: 120,
+    height: 120,
   },
-  submitPressed: {
-    backgroundColor: '#072a60',
+  heroTitle: {
+    marginTop: spacing.lg,
+    opacity: 1,
   },
-  submitText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
+  heroSubtitle: {
+    marginTop: spacing.sm,
+    opacity: 0.85,
+    textAlign: 'center',
   },
-  footerHint: {
-    marginTop: 24,
-    color: '#5a6473',
-    fontSize: 13,
-    lineHeight: 18,
+  form: {
+    flex: 1,
+    padding: spacing.xxl,
+    justifyContent: 'flex-start',
+  },
+  gapMd: {
+    height: spacing.md,
+  },
+  gapXl: {
+    height: spacing.xl,
+  },
+  err: {
+    marginBottom: spacing.sm,
+  },
+  fullBtn: {
+    alignSelf: 'stretch',
   },
 });

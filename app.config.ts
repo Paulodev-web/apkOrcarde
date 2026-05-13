@@ -1,15 +1,58 @@
 import type { ExpoConfig } from 'expo/config';
 
+type AppVariant = 'development' | 'preview' | 'production';
+
+const appVariant = (process.env.APP_VARIANT as AppVariant | undefined) ?? 'production';
+const easProjectId =
+  process.env.EAS_PROJECT_ID || '2e2796fb-37d7-4b9d-add9-7fe09ec203cf';
+
+const variantConfig: Record<AppVariant, { appName: string; packageName: string }> = {
+  development: {
+    appName: 'OrcaRede Manager (Dev)',
+    packageName: 'com.orcarede.manager.dev',
+  },
+  preview: {
+    appName: 'OrcaRede Manager (Preview)',
+    packageName: 'com.orcarede.manager.preview',
+  },
+  production: {
+    appName: 'OrcaRede Manager',
+    packageName: 'com.orcarede.manager',
+  },
+};
+
 const config: ExpoConfig = {
-  name: 'OrcaRede Manager',
+  name: variantConfig[appVariant].appName,
+  owner: 'devpaulo',
   slug: 'orcarede-apk',
-  version: '0.1.0',
+  version: '1.0.0',
+  runtimeVersion: {
+    policy: 'appVersion',
+  },
   orientation: 'portrait',
   scheme: 'orcarede',
   userInterfaceStyle: 'light',
+  icon: './assets/icon.png',
+  ...(easProjectId
+    ? {
+        updates: {
+          url: `https://u.expo.dev/${easProjectId}`,
+        },
+      }
+    : {}),
+  splash: {
+    image: './assets/splash.png',
+    resizeMode: 'contain',
+    backgroundColor: '#FFFFFF',
+  },
   assetBundlePatterns: ['**/*'],
   android: {
-    package: 'com.orcarede.manager',
+    package: variantConfig[appVariant].packageName,
+    versionCode: 1,
+    adaptiveIcon: {
+      foregroundImage: './assets/icon.png',
+      backgroundColor: '#0a3a82',
+    },
     permissions: [
       'INTERNET',
       'ACCESS_NETWORK_STATE',
@@ -21,11 +64,12 @@ const config: ExpoConfig = {
       'RECORD_AUDIO',
       'ACCESS_FINE_LOCATION',
       'ACCESS_COARSE_LOCATION',
+      'POST_NOTIFICATIONS',
     ],
   },
   ios: {
     supportsTablet: false,
-    bundleIdentifier: 'com.orcarede.manager',
+    bundleIdentifier: variantConfig[appVariant].packageName,
   },
   web: {
     bundler: 'metro',
@@ -48,6 +92,12 @@ const config: ExpoConfig = {
         locationWhenInUsePermission: 'O app usa sua localizacao para registrar onde postes foram instalados.',
       },
     ],
+    [
+      'expo-notifications',
+      {
+        sounds: [],
+      },
+    ],
     '@config-plugins/react-native-blob-util',
     '@config-plugins/react-native-pdf',
     [
@@ -55,7 +105,7 @@ const config: ExpoConfig = {
       {
         android: {
           minSdkVersion: 26,
-          compileSdkVersion: 35,
+          compileSdkVersion: 36,
           targetSdkVersion: 35,
         },
       },
@@ -71,11 +121,12 @@ const config: ExpoConfig = {
     typedRoutes: true,
   },
   extra: {
+    appVariant,
     supabaseUrl: process.env.EXPO_PUBLIC_SUPABASE_URL,
     supabaseAnonKey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
     sentryDsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
     eas: {
-      projectId: process.env.EAS_PROJECT_ID,
+      projectId: easProjectId,
     },
   },
 };

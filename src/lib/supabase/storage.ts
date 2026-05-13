@@ -10,6 +10,7 @@ type UploadMediaParams = {
   fileUri: string;
   fileName: string;
   mimeType: string;
+  storagePath?: string;
 };
 
 type UploadResult = {
@@ -19,7 +20,7 @@ type UploadResult = {
 
 export async function uploadMedia(params: UploadMediaParams): Promise<UploadResult> {
   const { workId, feature, recordId, fileUri, fileName, mimeType } = params;
-  const storagePath = `${workId}/${feature}/${recordId}/${fileName}`;
+  const storagePath = params.storagePath ?? `${workId}/${feature}/${recordId}/${fileName}`;
 
   const { data: signedData, error: signedError } = await supabase.storage
     .from(STORAGE_BUCKET)

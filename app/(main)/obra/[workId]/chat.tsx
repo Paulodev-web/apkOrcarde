@@ -1,7 +1,8 @@
 'use client';
 
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Camera, ChevronLeft, ImagePlus, SendHorizontal } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -10,11 +11,17 @@ import {
   Image,
   Pressable,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
 
+import { SyncStatusIcon } from '@/design-system/composed/SyncStatusIcon';
+import { IconButton } from '@/design-system/primitives/IconButton';
+import { Text } from '@/design-system/primitives/Text';
+import { ScreenHeader } from '@/design-system/layouts/ScreenHeader';
+import { colors } from '@/design-system/tokens/colors';
+import { radius } from '@/design-system/tokens/radius';
+import { spacing } from '@/design-system/tokens/spacing';
 import { CHAT_LIMITS, SIGNED_URL_TTL_SECONDS } from '@/constants/limits';
 import { chatMediaPath } from '@/constants/paths';
 import { useRealtimeChannel } from '@/hooks/useRealtimeChannel';
@@ -24,7 +31,7 @@ import { getSignedUrl } from '@/lib/supabase/storage';
 import { supabase } from '@/lib/supabase/client';
 import { useConnectivityStore } from '@/stores/connectivity.store';
 import { useSessionStore } from '@/stores/session.store';
-import type { MediaAsset, OutboxItem, WorkMessage } from '@/types';
+import type { MediaAsset, OutboxItem, OutboxStatus, WorkMessage } from '@/types';
 import type { SendWorkMessageAttachment } from '@/types/rpc';
 import { relativeTimePtBr } from '@/utils/relativeTime';
 import { uuidV4 } from '@/utils/uuid';
@@ -71,6 +78,7 @@ async function fetchMessages(workId: string, cursor?: string) {
 
 export default function ChatScreen() {
   const params = useLocalSearchParams<{ workId: string }>();
+  const router = useRouter();
   const workId = typeof params.workId === 'string' ? params.workId : '';
   const userId = useSessionStore((s) => s.user?.id ?? '');
   const isOnline = useConnectivityStore((s) => s.isOnline);
@@ -250,19 +258,31 @@ export default function ChatScreen() {
     return `local-${item.item.client_event_id}`;
   }, []);
 
+  const canSend = Boolean(inputText.trim() || pendingMedia.length > 0);
+
   return (
     <View style={styles.root}>
-      <Stack.Screen options={{ title: 'Chat' }} />
+      <Stack.Screen options={{ headerShown: false, title: 'Chat' }} />
+      <ScreenHeader
+        title="Chat"
+        leftAction={{
+          icon: ChevronLeft,
+          onPress: () => router.back(),
+          accessibilityLabel: 'Voltar',
+        }}
+      />
 
       {!isOnline ? (
         <View style={styles.offlineBanner}>
-          <Text style={styles.offlineText}>Sem conexao — mensagens serao enviadas quando voltar</Text>
+          <Text variant="body" color="warning" style={styles.offlineText}>
+            Sem conexao — mensagens serao enviadas quando voltar
+          </Text>
         </View>
       ) : null}
 
       {isLoading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#0a3a82" />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : (
         <FlatList
@@ -277,7 +297,7 @@ export default function ChatScreen() {
           onEndReachedThreshold={0.3}
           ListFooterComponent={
             isFetchingNextPage ? (
-              <ActivityIndicator size="small" color="#0a3a82" style={styles.footerLoader} />
+              <ActivityIndicator size="small" color={colors.primary} style={styles.footerLoader} />
             ) : null
           }
         />
@@ -291,11 +311,15 @@ export default function ChatScreen() {
                 <Image source={{ uri: m.uri }} style={styles.mediaThumb} />
               ) : (
                 <View style={styles.videoThumb}>
-                  <Text style={styles.videoThumbText}>Video</Text>
+                  <Text variant="caption" color="textInverse">
+                    Video
+                  </Text>
                 </View>
               )}
               <Pressable onPress={() => handleRemoveMedia(i)} style={styles.removeMediaBtn}>
-                <Text style={styles.removeMediaText}>X</Text>
+                <Text variant="caption" color="textInverse" style={styles.removeMediaText}>
+                  X
+                </Text>
               </Pressable>
             </View>
           ))}
@@ -303,14 +327,17 @@ export default function ChatScreen() {
       ) : null}
 
       <View style={styles.composer}>
-        <Pressable
-          onPress={() => handlePickImage('camera')}
-          style={styles.composerBtn}
+        <IconButton
+          icon={Camera}
+          variant="default"
+          size="md"
+          onPress={() => void handlePickImage('camera')}
           accessibilityLabel="Tirar foto"
-        >
-          <Text style={styles.composerIcon}>CAM</Text>
-        </Pressable>
-        <Pressable
+        />
+        <IconButton
+          icon={ImagePlus}
+          variant="default"
+          size="md"
           onPress={() => {
             Alert.alert('Anexar midia', 'Escolha o tipo', [
               { text: 'Foto da galeria', onPress: () => void handlePickImage('gallery') },
@@ -319,36 +346,32 @@ export default function ChatScreen() {
               { text: 'Cancelar', style: 'cancel' },
             ]);
           }}
-          style={styles.composerBtn}
           accessibilityLabel="Anexar midia"
-        >
-          <Text style={styles.composerIcon}>+</Text>
-        </Pressable>
+        />
 
         <TextInput
           ref={inputRef}
           value={inputText}
           onChangeText={setInputText}
           placeholder="Mensagem..."
-          placeholderTextColor="#8c95a6"
+          placeholderTextColor={colors.textMuted}
           multiline
           maxLength={CHAT_LIMITS.MAX_CONTENT_LENGTH}
           style={styles.textInput}
         />
 
-        <Pressable
-          onPress={() => void handleSend()}
-          disabled={!inputText.trim() && pendingMedia.length === 0}
-          style={({ pressed }) => [
-            styles.sendBtn,
-            (!inputText.trim() && pendingMedia.length === 0) ? styles.sendBtnDisabled : null,
-            pressed ? styles.sendBtnPressed : null,
-          ]}
-          accessibilityRole="button"
-          accessibilityLabel="Enviar mensagem"
-        >
-          <Text style={styles.sendBtnText}>Enviar</Text>
-        </Pressable>
+        <View style={[styles.sendWrap, !canSend ? styles.sendWrapDisabled : null]}>
+          <IconButton
+            icon={SendHorizontal}
+            variant="primary"
+            size="md"
+            onPress={() => {
+              if (!canSend) return;
+              void handleSend();
+            }}
+            accessibilityLabel="Enviar mensagem"
+          />
+        </View>
       </View>
     </View>
   );
@@ -358,45 +381,61 @@ function RemoteMessageBubble({ message, userId }: { message: WorkMessage; userId
   const isMine = message.sender_id === userId;
 
   return (
-    <View style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleTheirs]}>
+    <View
+      style={[
+        styles.bubble,
+        isMine ? styles.bubbleMine : styles.bubbleTheirs,
+        isMine ? styles.bubbleMineShape : styles.bubbleTheirsShape,
+      ]}
+    >
       {!isMine ? (
-        <Text style={styles.senderLabel}>Engenheiro</Text>
+        <Text variant="label" color="info" style={styles.senderLabel}>
+          Engenheiro
+        </Text>
       ) : null}
       {message.content ? (
-        <Text style={styles.messageText}>{message.content}</Text>
+        <Text variant="body" color={isMine ? 'textInverse' : 'textPrimary'}>
+          {message.content}
+        </Text>
       ) : null}
       <AttachmentsList attachments={message.work_message_attachments} />
       <View style={styles.metaRow}>
-        <Text style={styles.timeText}>{relativeTimePtBr(message.created_at)}</Text>
-        {isMine ? <Text style={styles.statusIcon}>✓</Text> : null}
+        <Text variant="caption" color={isMine ? 'textInverse' : 'textMuted'} style={isMine ? styles.timeOnPrimary : undefined}>
+          {relativeTimePtBr(message.created_at)}
+        </Text>
+        {isMine ? (
+          <Text variant="caption" color="textInverse">
+            ✓
+          </Text>
+        ) : null}
       </View>
     </View>
   );
 }
 
 function LocalMessageBubble({ item, payload }: { item: OutboxItem; payload: LocalPayload }) {
-  const statusIcon = getStatusIcon(item.status);
   const mediaPaths: string[] = item.media_paths ? JSON.parse(item.media_paths) : [];
 
   return (
-    <View style={[styles.bubble, styles.bubbleMine]}>
+    <View style={[styles.bubble, styles.bubbleMine, styles.bubbleMineShape]}>
       {payload.content ? (
-        <Text style={styles.messageText}>{payload.content}</Text>
+        <Text variant="body" color="textInverse">
+          {payload.content}
+        </Text>
       ) : null}
       {mediaPaths.map((uri, i) => (
         <Image key={i} source={{ uri }} style={styles.localMediaThumb} />
       ))}
       <View style={styles.metaRow}>
-        <Text style={styles.timeText}>{relativeTimePtBr(payload.created_at)}</Text>
-        <Text style={[
-          styles.statusIcon,
-          item.status === 'failed' ? styles.statusFailed : null,
-        ]}>
-          {statusIcon}
+        <Text variant="caption" color="textInverse" style={styles.timeOnPrimary}>
+          {relativeTimePtBr(payload.created_at)}
         </Text>
+        <SyncStatusIcon status={item.status as OutboxStatus} />
         {item.status === 'failed' && item.last_error ? (
           <Pressable onPress={() => Alert.alert('Erro de envio', item.last_error ?? 'Erro desconhecido')}>
-            <Text style={styles.errorTapText}>Ver erro</Text>
+            <Text variant="caption" color="textInverse" style={styles.errorTapText}>
+              Ver erro
+            </Text>
           </Pressable>
         ) : null}
       </View>
@@ -432,30 +471,21 @@ function AttachmentItem({ attachment }: { attachment: WorkMessage['work_message_
       <Image source={{ uri: url }} style={styles.attachmentImage} resizeMode="cover" />
     ) : (
       <View style={styles.attachmentPlaceholder}>
-        <Text style={styles.attachmentPlaceholderText}>Imagem</Text>
+        <Text variant="caption" color="textMuted">
+          Imagem
+        </Text>
       </View>
     );
   }
 
   return (
     <View style={styles.attachmentMeta}>
-      <Text style={styles.attachmentMetaText}>
+      <Text variant="caption" color="textSecondary">
         {attachment.file_type === 'video' ? 'Video' : attachment.file_type === 'audio' ? 'Audio' : 'Arquivo'}
         {attachment.duration_seconds ? ` (${Math.round(attachment.duration_seconds)}s)` : ''}
       </Text>
     </View>
   );
-}
-
-function getStatusIcon(status: string): string {
-  switch (status) {
-    case 'pending': return '◷';
-    case 'uploading_media': return '↑';
-    case 'calling_rpc': return '↑';
-    case 'synced': return '✓';
-    case 'failed': return '✕';
-    default: return '?';
-  }
 }
 
 async function markMessagesAsRead(workId: string, userId: string): Promise<void> {
@@ -473,7 +503,7 @@ async function markMessagesAsRead(workId: string, userId: string): Promise<void>
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#f3f6fb',
+    backgroundColor: colors.surfaceMuted,
   },
   center: {
     flex: 1,
@@ -481,72 +511,63 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   offlineBanner: {
-    backgroundColor: '#fdf3d6',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    backgroundColor: colors.warningBg,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
   offlineText: {
-    color: '#7a5b00',
-    fontSize: 13,
     textAlign: 'center',
   },
   listContent: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
   },
   footerLoader: {
-    marginVertical: 16,
+    marginVertical: spacing.md,
   },
   bubble: {
     maxWidth: '80%',
-    borderRadius: 12,
-    padding: 10,
+    padding: spacing.sm + 2,
     marginVertical: 3,
+  },
+  bubbleMineShape: {
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    borderBottomLeftRadius: radius.sm,
+    borderBottomRightRadius: radius.lg,
+  },
+  bubbleTheirsShape: {
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    borderBottomLeftRadius: radius.lg,
+    borderBottomRightRadius: radius.sm,
   },
   bubbleMine: {
     alignSelf: 'flex-end',
-    backgroundColor: '#d4e6fc',
+    backgroundColor: colors.primary,
   },
   bubbleTheirs: {
     alignSelf: 'flex-start',
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#e3e8ef',
+    borderColor: colors.border,
   },
   senderLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#0a3a82',
     marginBottom: 2,
-  },
-  messageText: {
-    fontSize: 15,
-    color: '#1c1f24',
-    lineHeight: 20,
   },
   metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
-    marginTop: 4,
-    gap: 4,
+    marginTop: spacing.xs,
+    gap: spacing.xs,
   },
-  timeText: {
-    fontSize: 11,
-    color: '#5a6473',
-  },
-  statusIcon: {
-    fontSize: 13,
-    color: '#0a3a82',
-  },
-  statusFailed: {
-    color: '#c0392b',
+  timeOnPrimary: {
+    opacity: 0.85,
   },
   errorTapText: {
-    fontSize: 11,
-    color: '#c0392b',
     textDecorationLine: 'underline',
-    marginLeft: 4,
+    marginLeft: spacing.xs,
   },
   attachmentsContainer: {
     marginTop: 6,
@@ -555,44 +576,36 @@ const styles = StyleSheet.create({
   attachmentImage: {
     width: 200,
     height: 150,
-    borderRadius: 8,
+    borderRadius: radius.md,
   },
   attachmentPlaceholder: {
     width: 200,
     height: 100,
-    borderRadius: 8,
-    backgroundColor: '#e3e8ef',
+    borderRadius: radius.md,
+    backgroundColor: colors.neutralBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  attachmentPlaceholderText: {
-    color: '#5a6473',
-    fontSize: 12,
-  },
   attachmentMeta: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: '#e3e8ef',
-    borderRadius: 8,
-  },
-  attachmentMetaText: {
-    fontSize: 13,
-    color: '#3b4452',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm + 2,
+    backgroundColor: colors.neutralBg,
+    borderRadius: radius.md,
   },
   localMediaThumb: {
     width: 120,
     height: 90,
-    borderRadius: 8,
-    marginTop: 4,
+    borderRadius: radius.md,
+    marginTop: spacing.xs,
   },
   mediaPreviewRow: {
     flexDirection: 'row',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#ffffff',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#e3e8ef',
-    gap: 8,
+    borderTopColor: colors.border,
+    gap: spacing.sm,
   },
   mediaPreviewItem: {
     position: 'relative',
@@ -600,89 +613,56 @@ const styles = StyleSheet.create({
   mediaThumb: {
     width: 56,
     height: 56,
-    borderRadius: 6,
+    borderRadius: radius.sm,
   },
   videoThumb: {
     width: 56,
     height: 56,
-    borderRadius: 6,
-    backgroundColor: '#1c1f24',
+    borderRadius: radius.sm,
+    backgroundColor: colors.primaryDark,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  videoThumbText: {
-    color: '#ffffff',
-    fontSize: 10,
-    fontWeight: '700',
   },
   removeMediaBtn: {
     position: 'absolute',
     top: -4,
     right: -4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#c0392b',
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.danger,
     alignItems: 'center',
     justifyContent: 'center',
   },
   removeMediaText: {
-    color: '#ffffff',
-    fontSize: 11,
     fontWeight: '700',
   },
   composer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    backgroundColor: '#ffffff',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
     borderTopWidth: 1,
-    borderTopColor: '#e3e8ef',
-    gap: 4,
-  },
-  composerBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#e3effc',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  composerIcon: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#0a3a82',
+    borderTopColor: colors.border,
+    gap: spacing.xs,
   },
   textInput: {
     flex: 1,
     maxHeight: 100,
     borderWidth: 1,
-    borderColor: '#e3e8ef',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    borderColor: colors.border,
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     fontSize: 15,
-    color: '#1c1f24',
-    backgroundColor: '#f3f6fb',
+    color: colors.textPrimary,
+    backgroundColor: colors.surfaceMuted,
   },
-  sendBtn: {
-    height: 40,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    backgroundColor: '#0a3a82',
-    alignItems: 'center',
-    justifyContent: 'center',
+  sendWrap: {
+    alignSelf: 'flex-end',
   },
-  sendBtnDisabled: {
-    backgroundColor: '#a0b4d4',
-  },
-  sendBtnPressed: {
-    backgroundColor: '#072a60',
-  },
-  sendBtnText: {
-    color: '#ffffff',
-    fontWeight: '700',
-    fontSize: 14,
+  sendWrapDisabled: {
+    opacity: 0.38,
   },
 });

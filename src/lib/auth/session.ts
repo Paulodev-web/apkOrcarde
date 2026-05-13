@@ -1,13 +1,19 @@
 import { supabase } from '@/lib/supabase/client';
-import type { ActionResult, Profile, SessionUser } from '@/types';
+import type { ActionResult, Profile, ProfileRole, SessionUser } from '@/types';
 
 export type SignInSuccess = {
   user: SessionUser;
-  role: 'manager';
+  role: ProfileRole;
   mustChangePassword: boolean;
 };
 
-export async function signInManager(
+const APK_ALLOWED_ROLES = new Set<ProfileRole>(['engineer', 'manager']);
+
+export function hasApkAccess(role: ProfileRole): boolean {
+  return APK_ALLOWED_ROLES.has(role);
+}
+
+export async function signInApkUser(
   email: string,
   password: string,
 ): Promise<ActionResult<SignInSuccess>> {
@@ -26,11 +32,11 @@ export async function signInManager(
   }
 
   const profile = profileResult.data;
-  if (profile.role !== 'manager') {
+  if (!hasApkAccess(profile.role)) {
     await supabase.auth.signOut().catch(() => undefined);
     return {
       success: false,
-      error: 'Esta conta nao e de gerente. Acesse pelo portal web.',
+      error: 'Esta conta nao tem acesso ao APK.',
     };
   }
 
@@ -53,7 +59,7 @@ export async function signInManager(
         email: data.user.email ?? '',
         fullName: profile.full_name,
       },
-      role: 'manager',
+      role: profile.role,
       mustChangePassword,
     },
   };

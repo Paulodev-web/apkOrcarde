@@ -5,8 +5,11 @@ import { clearAll, getPendingCount } from '@/lib/offline/outbox';
 import { supabase } from '@/lib/supabase/client';
 import { useSessionStore } from '@/stores/session.store';
 import { useSyncStore } from '@/stores/sync.store';
+import { removeCurrentToken } from '@/lib/notifications/register';
+import { useNotificationStore } from '@/stores/notification.store';
 
 export async function logout(queryClient: QueryClient): Promise<void> {
+  await removeCurrentToken();
   await supabase.auth.signOut().catch(() => undefined);
   try {
     await clearAll();
@@ -15,6 +18,7 @@ export async function logout(queryClient: QueryClient): Promise<void> {
   }
   queryClient.clear();
   useSyncStore.getState().setPendingCount(0);
+  useNotificationStore.getState().clearUnread();
   useSessionStore.getState().clearSession();
 }
 

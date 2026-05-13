@@ -35,6 +35,7 @@ type OutboxRow = {
   created_at: string;
   synced_at: string | null;
   next_retry_at: string | null;
+  status_updated_at: string | null;
 };
 
 const ACTIVE_STATUSES: readonly OutboxStatus[] = ['pending', 'uploading_media', 'calling_rpc'];
@@ -88,11 +89,11 @@ export async function processNext(): Promise<OutboxItem | null> {
 
 export async function markSynced(id: number): Promise<void> {
   const db = await getDb();
-  const syncedAt = new Date().toISOString();
+  const now = new Date().toISOString();
 
   await db.runAsync(
-    `UPDATE outbox SET status = 'synced', synced_at = ?, last_error = NULL WHERE id = ?`,
-    [syncedAt, id],
+    `UPDATE outbox SET status = 'synced', synced_at = ?, last_error = NULL, status_updated_at = ? WHERE id = ?`,
+    [now, now, id],
   );
   outboxEmitter.emit();
 }
@@ -109,12 +110,13 @@ export async function markFailed(id: number, error: string): Promise<void> {
   const isExhausted = newAttempts >= row.max_attempts;
   const status: OutboxStatus = isExhausted ? 'failed' : 'pending';
   const nextRetryAt = isExhausted ? null : computeNextRetryIso(newAttempts);
+  const now = new Date().toISOString();
 
   await db.runAsync(
     `UPDATE outbox
-       SET attempts = ?, last_error = ?, next_retry_at = ?, status = ?
+       SET attempts = ?, last_error = ?, next_retry_at = ?, status = ?, status_updated_at = ?
      WHERE id = ?`,
-    [newAttempts, error, nextRetryAt, status, id],
+    [newAttempts, error, nextRetryAt, status, now, id],
   );
   outboxEmitter.emit();
 }
@@ -131,15 +133,20 @@ export async function getPendingCount(): Promise<number> {
 
 export async function updateStatus(id: number, status: OutboxStatus): Promise<void> {
   const db = await getDb();
-  await db.runAsync(`UPDATE outbox SET status = ? WHERE id = ?`, [status, id]);
+  const now = new Date().toISOString();
+  await db.runAsync(
+    `UPDATE outbox SET status = ?, status_updated_at = ? WHERE id = ?`,
+    [status, now, id],
+  );
   outboxEmitter.emit();
 }
 
 export async function markFailedNoRetry(id: number, error: string): Promise<void> {
   const db = await getDb();
+  const now = new Date().toISOString();
   await db.runAsync(
-    `UPDATE outbox SET status = 'failed', last_error = ? WHERE id = ?`,
-    [error, id],
+    `UPDATE outbox SET status = 'failed', last_error = ?, status_updated_at = ? WHERE id = ?`,
+    [error, now, id],
   );
   outboxEmitter.emit();
 }
@@ -187,6 +194,55 @@ export function computeNextRetryIso(attemptNumber: number, now: number = Date.no
   return new Date(now + steps[idx]).toISOString();
 }
 
+/**
+ * Recover items stuck in transient states after an app crash.
+ * Items in 'uploading_media' or 'calling_rpc' for longer than
+ * STUCK_THRESHOLD_MS are reset to 'pending' for re-processing.
+ */
+const STUCK_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
+
+export async function recoverStuckItems(): Promise<number> {
+  const db = await getDb();
+  const cutoff = new Date(Date.now() - STUCK_THRESHOLD_MS).toISOString();
+
+  const result = await db.runAsync(
+    `UPDATE outbox
+       SET status = 'pending', status_updated_at = ?
+     WHERE status IN ('uploading_media', 'calling_rpc')
+       AND COALESCE(status_updated_at, created_at) < ?`,
+    [new Date().toISOString(), cutoff],
+  );
+
+  if (result.changes > 0) {
+    outboxEmitter.emit();
+  }
+  return result.changes;
+}
+
+export async function retryFailedItem(id: number): Promise<void> {
+  const db = await getDb();
+  const now = new Date().toISOString();
+  await db.runAsync(
+    `UPDATE outbox SET status = 'pending', attempts = 0, next_retry_at = NULL, last_error = NULL, status_updated_at = ? WHERE id = ? AND status = 'failed'`,
+    [now, id],
+  );
+  outboxEmitter.emit();
+}
+
+export async function discardItem(id: number): Promise<void> {
+  const db = await getDb();
+  await db.runAsync(`DELETE FROM outbox WHERE id = ?`, [id]);
+  outboxEmitter.emit();
+}
+
+export async function getAllItems(): Promise<OutboxItem[]> {
+  const db = await getDb();
+  const rows = await db.getAllAsync<OutboxRow>(
+    `SELECT * FROM outbox WHERE status != 'synced' ORDER BY created_at DESC`,
+  );
+  return rows.map(rowToItem);
+}
+
 function rowToItem(row: OutboxRow): OutboxItem {
   return {
     id: row.id,
@@ -201,5 +257,6 @@ function rowToItem(row: OutboxRow): OutboxItem {
     created_at: row.created_at,
     synced_at: row.synced_at,
     next_retry_at: row.next_retry_at,
+    status_updated_at: row.status_updated_at,
   };
 }

@@ -2,7 +2,7 @@
 
 > As dividas tecnicas do projeto **web** sao mantidas em `[repo-web]/docs/known-debt.md`. Este arquivo cobre apenas as dividas do APK e dividas herdadas relevantes para o APK. Nao e duplicacao — sao escopos diferentes.
 
-Ultima atualizacao: 2026-05-11 (Bloco 3).
+Ultima atualizacao: 2026-05-12 (Bloco 7).
 
 ---
 
@@ -125,9 +125,69 @@ Ultima atualizacao: 2026-05-11 (Bloco 3).
 
 ---
 
+### DEBT-023 — Acumulado de metragem por obra nao implementado
+
+**Severidade:** Media.
+
+**Descricao:** O diario de obra (Bloco 4) exibe apenas a metragem planejada como referencia visual para o manager. O acumulado real (soma de metragens de todas as revisoes aprovadas anteriores) nao e calculado nem exibido. O manager precisa fazer a conta mentalmente ou verificar diarios anteriores.
+
+**Mitigacao atual:** V1 mostra apenas `meters_planned` do `work_project_snapshot` como referencia. Sem acumulado.
+
+**Resolucao planejada:** Bloco 9 (consolidacao) — criar view materializada ou query com SUM sobre `work_daily_log_revisions` aprovadas, agrupando por obra. Exibir como "Acumulado ate ontem: BT Xm / MT Ym / Rede Zm" na tela do form.
+
+---
+
+### DEBT-024 — Rascunho local do diario nao persistido
+
+**Severidade:** Baixa.
+
+**Descricao:** Se o manager preencher o formulario do diario parcialmente e sair da tela sem publicar, os dados sao perdidos. Nao ha persistencia em AsyncStorage do rascunho em andamento.
+
+**Mitigacao atual:** Nenhuma. Manager precisa repreencher o formulario se sair sem publicar.
+
+**Resolucao planejada:** Avaliar necessidade apos feedback de campo. Se necessario, salvar rascunho em AsyncStorage keyed por `${workId}:${logDate}` e limpar ao publicar com sucesso.
+
+---
+
+### DEBT-025 — Filtros de alertas nao implementados
+
+**Severidade:** Baixa.
+
+**Descricao:** A lista de alertas mostra todos os alertas da obra sem filtros por severidade, categoria ou status. Em obras com muitos alertas, a navegacao pode ficar dificil.
+
+**Mitigacao atual:** Alertas sao ordenados por data (mais recentes primeiro). Severidade visual forte ajuda a identificar criticos rapidamente.
+
+**Resolucao planejada:** Bloco 8+9+10 (consolidacao) — adicionar FlatList header com chips de filtro por status e severidade.
+
+---
+
+### DEBT-026 — Mapa inline com localizacao do alerta nao implementado
+
+**Severidade:** Baixa.
+
+**Descricao:** O detalhe do alerta exibe coordenadas GPS como texto com link para o Google Maps. Nao ha mapa inline (ex.: react-native-maps) mostrando a localizacao visualmente no proprio app.
+
+**Mitigacao atual:** Link "Abrir no Maps" redireciona para o Google Maps externo. Funcional, mas requer sair do app.
+
+**Resolucao planejada:** Avaliar necessidade apos feedback de campo. Se necessario, adicionar react-native-maps com marker no detalhe do alerta (requer novo Dev Client build).
+
+---
+
+### DEBT-027 — `fetchWorks` com embeds (milestones, contagens) e RLS
+
+**Severidade:** Media (somente se ocorrer em producao).
+
+**Descricao:** A lista de obras (`app/(main)/index.tsx`) usa um `select` PostgREST com relacionamentos/contagens (`work_milestones`, `work_project_posts`, `work_pole_installations`). Se as politicas RLS ou grants nao permitirem esses embeds para o papel `manager`, a query pode falhar ou retornar `null` nos relacionamentos.
+
+**Mitigacao atual:** Tratar erro na UI (lista vazia / mensagem). Confirmar no Supabase que `select` aninhado esta permitido para as tabelas envolvidas.
+
+**Resolucao planejada:** Se necessario, simplificar o `select` (sem embed) e buscar milestones/contagens em queries separadas ou via RPC agregadora.
+
+---
+
 ## Como abrir uma nova divida
 
-1. Adicionar entrada nesta lista com proximo ID disponivel (DEBT-023, ...).
+1. Adicionar entrada nesta lista com proximo ID disponivel (ex.: DEBT-028).
 2. Preencher Severidade, Descricao, Mitigacao atual, Resolucao planejada.
 3. Referenciar no PR/commit que introduziu a divida (ex.: "ver DEBT-021 em known-debt.md").
 4. Se a severidade for Alta, criar issue no tracker e linkar aqui.

@@ -46,6 +46,7 @@ coverage/
 
 # Logs
 *.log
+build-log.txt
 
 # TypeScript
 *.tsbuildinfo

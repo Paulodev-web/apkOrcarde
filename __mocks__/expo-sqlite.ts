@@ -11,6 +11,7 @@ type OutboxRow = {
   created_at: string;
   synced_at: string | null;
   next_retry_at: string | null;
+  status_updated_at: string | null;
 };
 
 class InMemoryOutboxDb {
@@ -52,25 +53,28 @@ class InMemoryOutboxDb {
         created_at,
         synced_at: null,
         next_retry_at: null,
+        status_updated_at: null,
       });
       return { lastInsertRowId: id, changes: 1 };
     }
 
     if (norm.startsWith("UPDATE OUTBOX SET STATUS = 'SYNCED'")) {
-      const [synced_at, id] = params as [string, number];
+      const [synced_at, status_updated_at, id] = params as [string, string, number];
       const row = this.rows.find((r) => r.id === id);
       if (!row) return { lastInsertRowId: 0, changes: 0 };
       row.status = 'synced';
       row.synced_at = synced_at;
       row.last_error = null;
+      row.status_updated_at = status_updated_at;
       return { lastInsertRowId: 0, changes: 1 };
     }
 
     if (norm.startsWith('UPDATE OUTBOX SET ATTEMPTS')) {
-      const [attempts, last_error, next_retry_at, status, id] = params as [
+      const [attempts, last_error, next_retry_at, status, status_updated_at, id] = params as [
         number,
         string,
         string | null,
+        string,
         string,
         number,
       ];
@@ -80,23 +84,66 @@ class InMemoryOutboxDb {
       row.last_error = last_error;
       row.next_retry_at = next_retry_at;
       row.status = status;
+      row.status_updated_at = status_updated_at;
       return { lastInsertRowId: 0, changes: 1 };
     }
 
     if (norm.startsWith("UPDATE OUTBOX SET STATUS = 'FAILED'")) {
-      const [last_error, id] = params as [string, number];
+      const [last_error, status_updated_at, id] = params as [string, string, number];
       const row = this.rows.find((r) => r.id === id);
       if (!row) return { lastInsertRowId: 0, changes: 0 };
       row.status = 'failed';
       row.last_error = last_error;
+      row.status_updated_at = status_updated_at;
       return { lastInsertRowId: 0, changes: 1 };
     }
 
-    if (norm.startsWith('UPDATE OUTBOX SET STATUS = ?')) {
-      const [status, id] = params as [string, number];
+    // updateStatus: SET STATUS = ?, STATUS_UPDATED_AT = ? WHERE ID = ?
+    if (norm.includes('SET STATUS = ?') && norm.includes('STATUS_UPDATED_AT = ?') && !norm.includes('ATTEMPTS')) {
+      const [status, status_updated_at, id] = params as [string, string, number];
       const row = this.rows.find((r) => r.id === id);
       if (!row) return { lastInsertRowId: 0, changes: 0 };
       row.status = status;
+      row.status_updated_at = status_updated_at;
+      return { lastInsertRowId: 0, changes: 1 };
+    }
+
+    // recoverStuckItems
+    if (norm.includes("IN ('UPLOADING_MEDIA', 'CALLING_RPC')") || norm.includes("IN ('UPLOADING_MEDIA','CALLING_RPC')")) {
+      const [status_updated_at, cutoff] = params as [string, string];
+      let changes = 0;
+      for (const row of this.rows) {
+        if (
+          (row.status === 'uploading_media' || row.status === 'calling_rpc') &&
+          (row.status_updated_at ?? row.created_at) < cutoff
+        ) {
+          row.status = 'pending';
+          row.status_updated_at = status_updated_at;
+          changes++;
+        }
+      }
+      return { lastInsertRowId: 0, changes };
+    }
+
+    // retryFailedItem
+    if (norm.includes("STATUS = 'PENDING'") && norm.includes('ATTEMPTS = 0') && norm.includes("STATUS = 'FAILED'")) {
+      const [status_updated_at, id] = params as [string, number];
+      const row = this.rows.find((r) => r.id === id && r.status === 'failed');
+      if (!row) return { lastInsertRowId: 0, changes: 0 };
+      row.status = 'pending';
+      row.attempts = 0;
+      row.next_retry_at = null;
+      row.last_error = null;
+      row.status_updated_at = status_updated_at;
+      return { lastInsertRowId: 0, changes: 1 };
+    }
+
+    // discardItem or clearAll
+    if (norm.startsWith('DELETE FROM OUTBOX WHERE ID')) {
+      const [id] = params as [number];
+      const idx = this.rows.findIndex((r) => r.id === id);
+      if (idx === -1) return { lastInsertRowId: 0, changes: 0 };
+      this.rows.splice(idx, 1);
       return { lastInsertRowId: 0, changes: 1 };
     }
 
@@ -111,6 +158,13 @@ class InMemoryOutboxDb {
 
   async getAllAsync<T = OutboxRow>(sql: string, params: unknown[] = []): Promise<T[]> {
     const norm = sql.replace(/\s+/g, ' ').trim().toUpperCase();
+
+    if (norm.includes("WHERE STATUS != 'SYNCED'")) {
+      const out = this.rows.filter((r) => r.status !== 'synced');
+      out.sort((a, b) => b.created_at.localeCompare(a.created_at));
+      return out as unknown as T[];
+    }
+
     if (norm.includes("WHERE STATUS = 'FAILED'")) {
       const out = this.rows.filter((r) => r.status === 'failed');
       out.sort((a, b) => b.created_at.localeCompare(a.created_at));
@@ -124,6 +178,25 @@ class InMemoryOutboxDb {
       out.sort((a, b) => a.created_at.localeCompare(b.created_at));
       return out as unknown as T[];
     }
+
+    if (norm.includes('PRAGMA TABLE_INFO')) {
+      return [
+        { name: 'id' },
+        { name: 'client_event_id' },
+        { name: 'action_type' },
+        { name: 'payload' },
+        { name: 'media_paths' },
+        { name: 'status' },
+        { name: 'attempts' },
+        { name: 'max_attempts' },
+        { name: 'last_error' },
+        { name: 'created_at' },
+        { name: 'synced_at' },
+        { name: 'next_retry_at' },
+        { name: 'status_updated_at' },
+      ] as unknown as T[];
+    }
+
     return this.rows as unknown as T[];
   }
 

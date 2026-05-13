@@ -37,20 +37,21 @@
 
 ### O que é o APK
 
-Contraparte de campo do módulo **Andamento de Obra** do OrçaRede. O engenheiro usa o web; o gerente usa o APK. O APK **complementa** o web — não substitui.
+Contraparte de campo do módulo **Andamento de Obra** do OrçaRede. O gerente segue como ator principal do APK, e o engenheiro também pode acessar o app quando precisar operar pelo fluxo móvel. O APK **complementa** o web — não substitui.
 
-### Persona única: Manager (Gerente de obra)
+### Persona principal: Manager (Gerente de obra)
 
 - Opera no canteiro, frequentemente em zona rural com 4G/3G fraco
 - Usa celular Android barato a médio (target: Android 8+, 2GB RAM)
-- Recebe credenciais do engenheiro (email + senha temporária)
-- Vinculado a obras via `work_members` com `role='manager'`
+- O manager normalmente recebe credenciais do engenheiro (email + senha temporária)
+- O engineer também pode entrar com a própria conta do OrçaRede para usar o fluxo móvel
+- No APK, `manager` e `engineer` são aceitos no login; o comportamento móvel continua o mesmo para ambos
 - Pode estar alocado em N obras simultaneamente
 
 ### O que o APK faz
 
-1. **Login** com email/senha via Supabase Auth, validando `role='manager'`
-2. **Listar obras alocadas** ao gerente logado (RLS filtra implicitamente)
+1. **Login** com email/senha via Supabase Auth, validando acesso do papel ao APK (`manager` ou `engineer`)
+2. **Listar obras visíveis** ao usuário logado (RLS filtra implicitamente)
 3. **Por obra**:
    - Chat 1:1 com engineer (texto + foto + áudio + vídeo curto)
    - Marcar postes instalados (tap no PDF + foto + GPS + numeração)
@@ -190,7 +191,7 @@ Nenhum destes precisa de RPC. RLS + triggers já gateiam.
 | Snapshot do projeto | `from('work_project_snapshot').select('*').eq('work_id', workId).single()` | PDF path + materiais + metragens |
 | Postes planejados | `from('work_project_posts').select('*').eq('work_id', workId)` | Referência visual no PDF |
 | Conexões planejadas | `from('work_project_connections').select('*').eq('work_id', workId)` | Referência visual no PDF |
-| Perfil do usuário | `from('profiles').select('*').eq('id', userId).single()` | Pós-login, validar `role='manager'` |
+| Perfil do usuário | `from('profiles').select('*').eq('id', userId).single()` | Pós-login, validar acesso ao APK para `manager`/`engineer` |
 
 ### Categoria A2 — RPCs SQL (8 composite writes)
 
@@ -538,7 +539,7 @@ async function callRpc<T>(name: string, input: Record<string, unknown>): Promise
 - Sentry React Native (crash reporting desde dia 1)
 - Jest configurado (unit tests pra helpers)
 - Supabase client configurado (Auth + PostgREST + Storage + Realtime)
-- Auth flow: login → validar `role='manager'` → redirecionar → logout
+- Auth flow: login → validar acesso ao APK (`manager`/`engineer`) → redirecionar → logout
 - Troca de senha no primeiro login
 - Listagem de obras alocadas (PostgREST + RLS)
 - Tela de detalhe da obra (dados básicos)
@@ -887,8 +888,8 @@ Workspace web está em path com "ç" (`Migração`). **APK deve ter workspace em
 
 | Termo | Definição |
 | ----- | --------- |
-| Engineer | Usuário do portal web. Cria obras, valida diários/marcos, gerencia templates. `role='engineer'` |
-| Manager | Usuário do APK. Opera no canteiro. `role='manager'`. Conta criada pelo engineer |
+| Engineer | Usuário do portal web. Cria obras, valida diários/marcos, gerencia templates. Também pode acessar o APK com `role='engineer'` |
+| Manager | Usuário principal do APK. Opera no canteiro. `role='manager'`. Conta criada pelo engineer |
 | Crew | Membros operacionais sem login. Cadastrados em `crew_members` pelo engineer |
 | Obra (`works`) | Projeto de execução de rede elétrica. Entidade central |
 | Snapshot | Cópia imutável do projeto importado do orçamento (PDF + materiais + metragens) |

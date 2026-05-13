@@ -3,7 +3,23 @@ import * as rpcModule from '@/lib/supabase/rpc';
 import * as storageModule from '@/lib/supabase/storage';
 import type { OutboxItem } from '@/types';
 
-jest.mock('@/lib/supabase/rpc');
+jest.mock('@/lib/supabase/rpc', () => {
+  class RpcErr extends Error {
+    code: string;
+    constructor(message: string, code: string) {
+      super(message);
+      this.name = 'RpcError';
+      this.code = code;
+    }
+  }
+  return {
+    callRpc: jest.fn(),
+    RpcError: RpcErr,
+    isNonRetryableError: jest.fn((code: string) =>
+      ['P0001', 'P0403', '23514', '23503', '23505'].includes(code),
+    ),
+  };
+});
 jest.mock('@/lib/supabase/storage');
 jest.mock('@/lib/offline/outbox', () => ({
   ...jest.requireActual('@/lib/offline/outbox'),
@@ -87,7 +103,7 @@ describe('handleSendMessage', () => {
   });
 
   it('throws when RPC returns error', async () => {
-    mockCallRpc.mockResolvedValue({ success: false, error: 'Acesso negado.' });
+    mockCallRpc.mockResolvedValue({ success: false, error: 'Acesso negado.', code: 'P0403' });
 
     const item = makeOutboxItem();
     await expect(handleSendMessage(item)).rejects.toThrow('Acesso negado.');

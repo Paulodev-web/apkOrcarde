@@ -1,52 +1,25 @@
-import { useQueryClient } from '@tanstack/react-query';
-import { Stack } from 'expo-router';
-import { Pressable, StyleSheet, Text } from 'react-native';
+import { Drawer } from 'expo-router/drawer';
 
-import { logoutWithGuard } from '@/lib/auth/logout';
+import { DrawerContent } from '@/components/navigation/DrawerContent';
 
 export default function MainLayout() {
-  const queryClient = useQueryClient();
-
   return (
-    <Stack
+    <Drawer
+      drawerContent={(props) => <DrawerContent {...props} />}
       screenOptions={{
-        headerStyle: { backgroundColor: '#0a3a82' },
-        headerTintColor: '#ffffff',
-        headerTitleStyle: { fontWeight: '700' },
-        headerRight: () => (
-          <Pressable
-            onPress={() => logoutWithGuard(queryClient)}
-            style={({ pressed }) => [styles.btn, pressed ? styles.btnPressed : null]}
-            accessibilityRole="button"
-            accessibilityLabel="Sair"
-            hitSlop={12}
-          >
-            <Text style={styles.btnText}>Sair</Text>
-          </Pressable>
-        ),
+        headerShown: false,
+        drawerStyle: { width: '85%' },
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'Minhas obras' }} />
-      <Stack.Screen name="obra/[workId]" options={{ headerShown: false }} />
-    </Stack>
+      <Drawer.Screen name="index" options={{ title: 'Obras' }} />
+      <Drawer.Screen name="notificacoes" options={{ title: 'Notificações' }} />
+      <Drawer.Screen name="fila" options={{ title: 'Fila' }} />
+      <Drawer.Screen name="configuracoes" options={{ title: 'Configurações' }} />
+      <Drawer.Screen name="sobre" options={{ title: 'Sobre' }} />
+      <Drawer.Screen
+        name="obra/[workId]"
+        options={{ drawerItemStyle: { display: 'none' } }}
+      />
+    </Drawer>
   );
 }
-
-const styles = StyleSheet.create({
-  btn: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    minHeight: 44,
-    minWidth: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  btnPressed: {
-    opacity: 0.6,
-  },
-  btnText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});

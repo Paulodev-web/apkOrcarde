@@ -11,16 +11,32 @@ import {
   markSynced,
   outboxEmitter,
   processNext,
+  recoverStuckItems,
 } from './outbox';
-import { getHandler } from './sync-handlers';
-import { registerHandler } from './sync-handlers';
+import { getHandler, registerHandler } from './sync-handlers';
 import { handleSendMessage } from './handlers/chat.handler';
+import { handlePublishDailyLog } from './handlers/daily-log.handler';
 import { handleRecordPoleInstallation } from './handlers/pole.handler';
 import { handleRemovePoleInstallation } from './handlers/pole-remove.handler';
+import { handleReportMilestone } from './handlers/milestone.handler';
+import { handleSetMilestoneInProgress } from './handlers/milestone-status.handler';
+import { handleMarkChecklistItem } from './handlers/checklist.handler';
+import { handleSetChecklistInProgress } from './handlers/checklist-status.handler';
+import { handleOpenAlert } from './handlers/alert-open.handler';
+import { handleResolveAlert } from './handlers/alert-resolve.handler';
+import { handleAddAlertComment } from './handlers/alert-comment.handler';
 
 registerHandler('send_message', handleSendMessage);
+registerHandler('publish_daily_log', handlePublishDailyLog);
 registerHandler('record_pole_installation', handleRecordPoleInstallation);
 registerHandler('remove_pole_installation', handleRemovePoleInstallation);
+registerHandler('report_milestone', handleReportMilestone);
+registerHandler('set_milestone_in_progress', handleSetMilestoneInProgress);
+registerHandler('mark_checklist_item', handleMarkChecklistItem);
+registerHandler('set_checklist_in_progress', handleSetChecklistInProgress);
+registerHandler('open_alert', handleOpenAlert);
+registerHandler('resolve_alert_in_field', handleResolveAlert);
+registerHandler('add_alert_comment', handleAddAlertComment);
 
 let running = false;
 let wakeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -44,15 +60,27 @@ async function processQueue(): Promise<void> {
         continue;
       }
 
-      captureBreadcrumb('sync', `Processing ${item.action_type} id=${item.id}`);
+      captureBreadcrumb('sync', `Processing ${item.action_type}`, {
+        client_event_id: item.client_event_id,
+        attempt: item.attempts + 1,
+        id: item.id,
+      });
 
       try {
         await handler(item);
         await markSynced(item.id);
-        captureBreadcrumb('sync', `Synced ${item.action_type} id=${item.id}`);
+        captureBreadcrumb('sync', `Synced ${item.action_type}`, {
+          client_event_id: item.client_event_id,
+          id: item.id,
+        });
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        captureBreadcrumb('sync', `Failed ${item.action_type} id=${item.id}: ${message}`);
+        captureBreadcrumb(
+          'sync',
+          `Failed ${item.action_type}: ${message}`,
+          { client_event_id: item.client_event_id, id: item.id, code: extractErrorCode(err) },
+          'error',
+        );
 
         const code = extractErrorCode(err);
         if (isNonRetryableError(code)) {
@@ -93,6 +121,15 @@ function extractErrorCode(err: unknown): string | undefined {
 }
 
 export function startSyncWorker(): () => void {
+  // Recover items that were stuck mid-processing when app crashed
+  void recoverStuckItems().then((recovered) => {
+    if (recovered > 0) {
+      captureBreadcrumb('sync', `Recovered ${recovered} stuck items on boot`, {
+        recovered,
+      }, 'warning');
+    }
+  });
+
   const unsubOutbox = outboxEmitter.subscribe(() => {
     void refreshPendingCount();
     scheduleWake();

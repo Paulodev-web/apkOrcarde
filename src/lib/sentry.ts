@@ -24,9 +24,14 @@ export function initSentry(): typeof Sentry | null {
   return Sentry;
 }
 
-export function captureBreadcrumb(category: string, message: string): void {
+export function captureBreadcrumb(
+  category: string,
+  message: string,
+  data?: Record<string, unknown>,
+  level: 'info' | 'warning' | 'error' = 'info',
+): void {
   if (!initialized) return;
-  Sentry.addBreadcrumb({ category, message, level: 'info' });
+  Sentry.addBreadcrumb({ category, message, data, level });
 }
 
 export function captureException(error: unknown): void {

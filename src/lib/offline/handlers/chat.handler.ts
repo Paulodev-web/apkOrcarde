@@ -1,6 +1,6 @@
 import type { OutboxItem } from '@/types';
 import type { SendWorkMessageInput } from '@/types/rpc';
-import { callRpc } from '@/lib/supabase/rpc';
+import { callRpc, RpcError } from '@/lib/supabase/rpc';
 import { uploadMedia } from '@/lib/supabase/storage';
 import { updateStatus } from '@/lib/offline/outbox';
 
@@ -48,7 +48,7 @@ export async function handleSendMessage(item: OutboxItem): Promise<void> {
   );
 
   if (!result.success) {
-    throw new Error(result.error);
+    throw new RpcError(result.error, result.code ?? 'UNKNOWN');
   }
 }
 

@@ -26,6 +26,10 @@ CREATE INDEX IF NOT EXISTS outbox_status_created_at_idx
   ON outbox (status, created_at);
 `;
 
+const MIGRATION_ADD_STATUS_UPDATED_AT = `
+ALTER TABLE outbox ADD COLUMN status_updated_at TEXT;
+`;
+
 export async function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (!dbPromise) {
     dbPromise = openAndMigrate();
@@ -37,6 +41,20 @@ async function openAndMigrate(): Promise<SQLite.SQLiteDatabase> {
   const db = await SQLite.openDatabaseAsync(DB_NAME);
   await db.execAsync(SCHEMA_SQL);
   await db.execAsync(STATUS_INDEX_SQL);
+
+  // Backward-compatible migration: add status_updated_at if missing
+  try {
+    const cols = await db.getAllAsync<{ name: string }>(
+      `PRAGMA table_info(outbox)`,
+    );
+    const hasColumn = cols.some((c) => c.name === 'status_updated_at');
+    if (!hasColumn) {
+      await db.execAsync(MIGRATION_ADD_STATUS_UPDATED_AT);
+    }
+  } catch {
+    // tolerate — column may already exist from a prior run
+  }
+
   return db;
 }
 

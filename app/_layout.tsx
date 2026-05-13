@@ -1,17 +1,27 @@
+/* eslint-disable import/no-duplicates -- react-native-gesture-handler: side-effect + named imports from same entry */
+import 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+/* eslint-enable import/no-duplicates */
+
+import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { focusManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { ActivityIndicator, AppState, type AppStateStatus, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { loadProfileForLoggedInUser } from '@/lib/auth/session';
+import { colors } from '@/design-system/tokens/colors';
+import { hasApkAccess, loadProfileForLoggedInUser } from '@/lib/auth/session';
 import { startSyncWorker } from '@/lib/offline/sync-worker';
 import { initSentry } from '@/lib/sentry';
 import { supabase } from '@/lib/supabase/client';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useSessionStore } from '@/stores/session.store';
 import { QUERY_DEFAULTS } from '@/constants/limits';
+import { setupAndroidNotificationChannel } from '@/lib/notifications/channel';
+import { registerForPushNotifications, refreshLastSeen } from '@/lib/notifications/register';
+import { setupNotificationHandlers } from '@/lib/notifications/handlers';
 
 initSentry();
 
@@ -44,11 +54,13 @@ export default function RootLayout() {
   }
   const queryClient = queryClientRef.current;
 
-  useNetworkStatus();
+  useNetworkStatus(queryClient);
   useAuthHydration();
   useAuthGuard();
+  const router = useRouter();
 
   const isAuthenticated = useSessionStore((s) => s.isAuthenticated);
+  const userId = useSessionStore((s) => s.user?.id ?? '');
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -57,26 +69,46 @@ export default function RootLayout() {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    const sub = AppState.addEventListener('change', onAppStateChange);
-    return () => sub.remove();
+    void setupAndroidNotificationChannel();
   }, []);
+
+  useEffect(() => {
+    if (!isAuthenticated || !userId) return;
+    void registerForPushNotifications(userId);
+    const cleanup = setupNotificationHandlers(router);
+    return cleanup;
+  }, [isAuthenticated, userId, router]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (status) => {
+      onAppStateChange(status);
+      if (status === 'active' && userId) {
+        void refreshLastSeen(userId);
+      }
+    });
+    return () => sub.remove();
+  }, [userId]);
 
   const isLoading = useSessionStore((s) => s.isLoading);
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <SafeAreaProvider>
-        <StatusBar style="dark" />
-        {isLoading ? <SplashLoader /> : <Slot />}
-      </SafeAreaProvider>
-    </QueryClientProvider>
+    <GestureHandlerRootView style={styles.flex}>
+      <QueryClientProvider client={queryClient}>
+        <SafeAreaProvider>
+          <BottomSheetModalProvider>
+            <StatusBar style="dark" />
+            {isLoading ? <SplashLoader /> : <Slot />}
+          </BottomSheetModalProvider>
+        </SafeAreaProvider>
+      </QueryClientProvider>
+    </GestureHandlerRootView>
   );
 }
 
 function SplashLoader() {
   return (
     <View style={styles.splash}>
-      <ActivityIndicator size="large" color="#0a3a82" />
+      <ActivityIndicator size="large" color={colors.primary} />
     </View>
   );
 }
@@ -99,8 +131,8 @@ function useAuthHydration(): void {
         setLoading(false);
         return;
       }
-      const userId = data.session.user.id;
-      const profileResult = await loadProfileForLoggedInUser(userId);
+      const uid = data.session.user.id;
+      const profileResult = await loadProfileForLoggedInUser(uid);
       if (cancelled) return;
       if (!profileResult.success) {
         await supabase.auth.signOut().catch(() => undefined);
@@ -109,7 +141,7 @@ function useAuthHydration(): void {
         return;
       }
       const profile = profileResult.data;
-      if (profile.role !== 'manager' || !profile.is_active) {
+      if (!hasApkAccess(profile.role) || !profile.is_active) {
         await supabase.auth.signOut().catch(() => undefined);
         clearSession();
         setLoading(false);
@@ -118,11 +150,11 @@ function useAuthHydration(): void {
       const meta = (data.session.user.user_metadata ?? {}) as Record<string, unknown>;
       setSession({
         user: {
-          id: userId,
+          id: uid,
           email: data.session.user.email ?? '',
           fullName: profile.full_name,
         },
-        role: 'manager',
+        role: profile.role,
         mustChangePassword: meta.must_change_password === true,
       });
     })();
@@ -162,9 +194,9 @@ function useAuthGuard(): void {
 
   const target = useMemo<TargetRoute>(() => {
     if (isLoading) return null;
-    if (!isAuthenticated || role !== 'manager') return '/(auth)/login';
+    if (!isAuthenticated || !role || !hasApkAccess(role)) return '/(auth)/login';
     if (mustChangePassword) return '/(auth)/change-password';
-    return '/(main)/';
+    return '/(main)';
   }, [isLoading, isAuthenticated, role, mustChangePassword]);
 
   useEffect(() => {
@@ -186,21 +218,24 @@ function useAuthGuard(): void {
       }
       return;
     }
-    if (target === '/(main)/') {
+    if (target === '/(main)') {
       if (!inMainGroup) {
-        router.replace('/(main)/');
+        router.replace('/(main)');
       }
     }
   }, [router, segments, target]);
 }
 
-type TargetRoute = '/(auth)/login' | '/(auth)/change-password' | '/(main)/' | null;
+type TargetRoute = '/(auth)/login' | '/(auth)/change-password' | '/(main)' | null;
 
 const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+  },
   splash: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.surface,
   },
 });
