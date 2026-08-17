@@ -12,11 +12,17 @@ import { ActivityIndicator, AppState, type AppStateStatus, StyleSheet, View } fr
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { colors } from '@/design-system/tokens/colors';
+import {
+  clearCachedProfile,
+  readCachedProfile,
+  saveCachedProfile,
+} from '@/lib/auth/profile-cache';
 import { hasApkAccess, loadProfileForLoggedInUser } from '@/lib/auth/session';
 import { startSyncWorker } from '@/lib/offline/sync-worker';
 import { initSentry } from '@/lib/sentry';
 import { supabase } from '@/lib/supabase/client';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
+import { useConnectivityStore } from '@/stores/connectivity.store';
 import { useSessionStore } from '@/stores/session.store';
 import { QUERY_DEFAULTS } from '@/constants/limits';
 import { setupAndroidNotificationChannel } from '@/lib/notifications/channel';
@@ -47,6 +53,16 @@ function onAppStateChange(status: AppStateStatus): void {
   focusManager.setFocused(status === 'active');
 }
 
+/**
+ * Encerra a sessao de verdade — usar somente quando o servidor confirmou que a
+ * conta nao serve mais. Falta de sinal nunca deve chegar aqui: o refresh token
+ * precisa sobreviver ao dia inteiro sem rede.
+ */
+async function endSessionForGood(): Promise<void> {
+  await supabase.auth.signOut().catch(() => undefined);
+  await clearCachedProfile().catch(() => undefined);
+}
+
 export default function RootLayoutApp() {
   const queryClientRef = useRef<QueryClient | null>(null);
   if (!queryClientRef.current) {
@@ -56,6 +72,7 @@ export default function RootLayoutApp() {
 
   useNetworkStatus(queryClient);
   useAuthHydration();
+  useProfileRevalidation();
   useAuthGuard();
   const router = useRouter();
 
@@ -124,6 +141,7 @@ function useAuthHydration(): void {
     let cancelled = false;
 
     void (async () => {
+      // `getSession` le do armazenamento local: funciona sem rede.
       const { data } = await supabase.auth.getSession();
       if (cancelled) return;
       if (!data.session || !data.session.user) {
@@ -131,32 +149,63 @@ function useAuthHydration(): void {
         setLoading(false);
         return;
       }
-      const uid = data.session.user.id;
+
+      const authUser = data.session.user;
+      const uid = authUser.id;
+      const email = authUser.email ?? '';
+      const meta = (authUser.user_metadata ?? {}) as Record<string, unknown>;
+      const mustChangePassword = meta.must_change_password === true;
+
       const profileResult = await loadProfileForLoggedInUser(uid);
       if (cancelled) return;
-      if (!profileResult.success) {
-        await supabase.auth.signOut().catch(() => undefined);
+
+      if (profileResult.success) {
+        const profile = profileResult.data;
+        if (!hasApkAccess(profile.role) || !profile.is_active) {
+          await endSessionForGood();
+          if (cancelled) return;
+          clearSession();
+          setLoading(false);
+          return;
+        }
+        void saveCachedProfile(profile);
+        setSession({
+          user: { id: uid, email, fullName: profile.full_name },
+          role: profile.role,
+          mustChangePassword,
+        });
+        return;
+      }
+
+      // Sem rede: a sessao continua valida, so nao deu para confirmar o perfil
+      // agora. Entra com o que ficou guardado da ultima vez que houve sinal —
+      // e o caso do canteiro, e deslogar aqui prenderia o responsavel do lado
+      // de fora, sem conseguir nem logar de novo.
+      if (profileResult.code === 'offline') {
+        const cached = await readCachedProfile(uid);
+        if (cancelled) return;
+        if (cached && hasApkAccess(cached.role) && cached.is_active) {
+          setSession({
+            user: { id: uid, email, fullName: cached.full_name },
+            role: cached.role,
+            mustChangePassword,
+          });
+          return;
+        }
+        // Sem perfil guardado nao da para saber o papel. Manda para o login,
+        // mas NAO chama signOut: o refresh token precisa sobreviver para ele
+        // conseguir entrar assim que houver sinal.
         clearSession();
         setLoading(false);
         return;
       }
-      const profile = profileResult.data;
-      if (!hasApkAccess(profile.role) || !profile.is_active) {
-        await supabase.auth.signOut().catch(() => undefined);
-        clearSession();
-        setLoading(false);
-        return;
-      }
-      const meta = (data.session.user.user_metadata ?? {}) as Record<string, unknown>;
-      setSession({
-        user: {
-          id: uid,
-          email: data.session.user.email ?? '',
-          fullName: profile.full_name,
-        },
-        role: profile.role,
-        mustChangePassword: meta.must_change_password === true,
-      });
+
+      // O servidor respondeu e o problema e real (perfil inexistente, conta
+      // removida). Aqui sim encerra de vez.
+      await endSessionForGood();
+      if (cancelled) return;
+      clearSession();
+      setLoading(false);
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
@@ -182,6 +231,50 @@ function useAuthHydration(): void {
       sub.subscription.unsubscribe();
     };
   }, [clearSession, setLoading, setMustChangePassword, setSession, updateUserProfile]);
+}
+
+/**
+ * Reconfere o perfil quando a rede volta.
+ *
+ * Enquanto esteve sem sinal, o app confiou no perfil guardado no aparelho.
+ * Assim que ha conexao, confirma com o servidor — e aqui que o app descobre
+ * que a conta foi desativada durante o periodo offline. Roda em segundo plano:
+ * nunca bloqueia a tela nem interrompe quem esta registrando algo.
+ */
+function useProfileRevalidation(): void {
+  const isOnline = useConnectivityStore((s) => s.isOnline);
+  const isAuthenticated = useSessionStore((s) => s.isAuthenticated);
+  const userId = useSessionStore((s) => s.user?.id ?? '');
+  const updateUserProfile = useSessionStore((s) => s.updateUserProfile);
+  const clearSession = useSessionStore((s) => s.clearSession);
+
+  useEffect(() => {
+    if (!isOnline || !isAuthenticated || !userId) return;
+    let cancelled = false;
+
+    void (async () => {
+      const result = await loadProfileForLoggedInUser(userId);
+      if (cancelled) return;
+      // Falhou de novo (a rede pode ter caido no meio): mantem o que ja esta
+      // valendo. A proxima reconexao tenta outra vez.
+      if (!result.success) return;
+
+      const profile = result.data;
+      if (!hasApkAccess(profile.role) || !profile.is_active) {
+        await endSessionForGood();
+        if (cancelled) return;
+        clearSession();
+        return;
+      }
+
+      void saveCachedProfile(profile);
+      updateUserProfile({ fullName: profile.full_name });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOnline, isAuthenticated, userId, updateUserProfile, clearSession]);
 }
 
 function useAuthGuard(): void {

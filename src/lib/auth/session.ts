@@ -1,3 +1,6 @@
+import NetInfo from '@react-native-community/netinfo';
+
+import { saveCachedProfile } from '@/lib/auth/profile-cache';
 import { supabase } from '@/lib/supabase/client';
 import type { ActionResult, Profile, ProfileRole, SessionUser } from '@/types';
 
@@ -7,10 +10,48 @@ export type SignInSuccess = {
   mustChangePassword: boolean;
 };
 
+/**
+ * Motivo da falha ao carregar o perfil. O chamador precisa distinguir:
+ * `offline` e recuperavel (segue com o perfil guardado), `not_found` e
+ * `unknown` significam que o servidor respondeu algo errado de verdade.
+ */
+export type ProfileLoadFailureCode = 'offline' | 'not_found' | 'unknown';
+
 const APK_ALLOWED_ROLES = new Set<ProfileRole>(['engineer', 'manager']);
 
 export function hasApkAccess(role: ProfileRole): boolean {
   return APK_ALLOWED_ROLES.has(role);
+}
+
+/** Erro de transporte (sem resposta do servidor), pelo formato da mensagem. */
+function looksLikeNetworkError(error: unknown): boolean {
+  const message = (error as { message?: string } | null)?.message ?? '';
+  const normalized = String(message).toLowerCase();
+  return (
+    normalized.includes('network request failed') ||
+    normalized.includes('failed to fetch') ||
+    normalized.includes('network error') ||
+    normalized.includes('unable to resolve host') ||
+    normalized.includes('econnrefused') ||
+    normalized.includes('etimedout') ||
+    normalized.includes('timeout') ||
+    normalized.includes('load failed')
+  );
+}
+
+/**
+ * Decide se a falha foi por falta de rede. Confere o formato do erro e, em
+ * seguida, o estado real da conexao — o NetInfo e a palavra final, porque
+ * mensagem de erro varia entre Android, emulador e versao do SDK.
+ */
+async function isOfflineFailure(error: unknown): Promise<boolean> {
+  if (looksLikeNetworkError(error)) return true;
+  try {
+    const state = await NetInfo.fetch();
+    return !state.isConnected;
+  } catch {
+    return false;
+  }
 }
 
 export async function signInApkUser(
@@ -51,6 +92,10 @@ export async function signInApkUser(
   const userMetadata = (data.user.user_metadata ?? {}) as Record<string, unknown>;
   const mustChangePassword = userMetadata.must_change_password === true;
 
+  // Guarda o perfil agora, enquanto ha rede — e o que vai sustentar as
+  // proximas aberturas do app no canteiro, sem sinal.
+  await saveCachedProfile(profile);
+
   return {
     success: true,
     data: {
@@ -65,20 +110,48 @@ export async function signInApkUser(
   };
 }
 
+/**
+ * Carrega o perfil do servidor.
+ *
+ * Em caso de falha, `code` diz se deu para falar com o servidor. Quem chama
+ * precisa dessa distincao: sem rede o app segue com o perfil guardado, mas
+ * "perfil nao existe" ou "conta desativada" sao motivos legitimos para
+ * encerrar a sessao.
+ */
 export async function loadProfileForLoggedInUser(
   userId: string,
 ): Promise<ActionResult<Profile>> {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, full_name, email, phone, role, is_active')
-    .eq('id', userId)
-    .single();
+  let data: unknown = null;
+  let error: unknown = null;
+
+  try {
+    const response = await supabase
+      .from('profiles')
+      .select('id, full_name, email, phone, role, is_active')
+      .eq('id', userId)
+      .single();
+    data = response.data;
+    error = response.error;
+  } catch (thrown) {
+    // supabase-js normalmente devolve o erro, mas uma falha de fetch pode
+    // escapar como excecao dependendo do ambiente.
+    error = thrown;
+  }
 
   if (error) {
-    return { success: false, error: 'Nao foi possivel carregar o perfil.' };
+    // PGRST116 = `.single()` sem nenhuma linha. O servidor respondeu.
+    const code = (error as { code?: string } | null)?.code;
+    if (code === 'PGRST116') {
+      return { success: false, error: 'Perfil nao encontrado.', code: 'not_found' };
+    }
+    if (await isOfflineFailure(error)) {
+      return { success: false, error: 'Sem conexao com o servidor.', code: 'offline' };
+    }
+    return { success: false, error: 'Nao foi possivel carregar o perfil.', code: 'unknown' };
   }
+
   if (!data) {
-    return { success: false, error: 'Perfil nao encontrado.' };
+    return { success: false, error: 'Perfil nao encontrado.', code: 'not_found' };
   }
 
   return { success: true, data: data as Profile };
