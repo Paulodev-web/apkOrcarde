@@ -118,6 +118,20 @@ Everything from Blocos 1–7 plus:
 
 ## Build and distribution
 
+### EAS environment variables (required for production APK)
+
+Variables in the Expo dashboard are **not** applied automatically unless the build profile sets `"environment"` in [`eas.json`](eas.json). Each profile must map to the matching EAS environment:
+
+| Profile | `environment` in eas.json |
+| --- | --- |
+| `development` | `development` |
+| `preview` | `preview` |
+| `production` / `production-apk` | `production` |
+
+Create variables for the **production** environment (at minimum `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`), then run a **new** EAS build. Installing an older APK will still crash or show a config error if those values were never embedded.
+
+Verify after build: the JS bundle should contain your Supabase project host, and `assets/app.config` inside the APK should include `extra.supabaseUrl` / `extra.supabaseAnonKey`.
+
 ### Preview (Internal Distribution)
 ```bash
 npx eas build --platform android --profile preview
@@ -181,4 +195,5 @@ The `notifications`, `device_tokens` tables and the `notify_push_on_notification
 | Items stuck in "uploading_media" | App crash during upload. Reopen app — stuck recovery runs on boot and resets items older than 10 minutes. |
 | Queue shows "failed" items | Open the queue screen (tap pending count banner). Review error, then retry or discard. |
 | EAS build fails | Ensure `eas.json` profiles are correct. Run `eas whoami` to verify auth. Check that `EAS_PROJECT_ID` matches the project. |
+| App closes immediately on open (production APK) | EAS env vars exist but profile lacks `"environment": "production"`, or APK was built before vars were set. Fix `eas.json`, run a new `production-apk` build, reinstall. |
 | Sentry not reporting | `EXPO_PUBLIC_SENTRY_DSN` must be set. If empty, Sentry does not initialize (by design). |

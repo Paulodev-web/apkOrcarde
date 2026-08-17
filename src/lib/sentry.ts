@@ -1,13 +1,13 @@
 import * as Sentry from '@sentry/react-native';
-import Constants from 'expo-constants';
+
+import { getPublicEnvConfig } from '@/lib/env';
 
 let initialized = false;
 
 export function initSentry(): typeof Sentry | null {
   if (initialized) return Sentry;
 
-  const extra = Constants.expoConfig?.extra ?? {};
-  const dsn = (extra.sentryDsn as string | undefined) ?? process.env.EXPO_PUBLIC_SENTRY_DSN;
+  const dsn = getPublicEnvConfig()?.sentryDsn;
 
   if (!dsn || dsn.trim().length === 0) {
     return null;

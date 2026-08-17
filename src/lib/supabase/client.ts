@@ -2,20 +2,20 @@ import 'react-native-url-polyfill/auto';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-const extra = Constants.expoConfig?.extra ?? {};
-const supabaseUrl = (extra.supabaseUrl as string | undefined) ?? process.env.EXPO_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey =
-  (extra.supabaseAnonKey as string | undefined) ?? process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
+import { getPublicEnvConfig } from '@/lib/env';
 
-if (!supabaseUrl || !supabaseAnonKey) {
+const publicEnv = getPublicEnvConfig();
+
+if (!publicEnv) {
   throw new Error(
-    'Supabase credentials are missing. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in .env.',
+    'Supabase credentials are missing. Set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY for the EAS production environment and rebuild.',
   );
 }
+
+const { supabaseUrl, supabaseAnonKey } = publicEnv;
 
 const isWebEnv = Platform.OS === 'web';
 
