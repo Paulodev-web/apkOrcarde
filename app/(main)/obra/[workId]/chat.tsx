@@ -1,8 +1,8 @@
 'use client';
 
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { Camera, ChevronLeft, ImagePlus, SendHorizontal } from 'lucide-react-native';
+import { Stack, useLocalSearchParams } from 'expo-router';
+import { Camera, ImagePlus, SendHorizontal } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -18,7 +18,7 @@ import {
 import { SyncStatusIcon } from '@/design-system/composed/SyncStatusIcon';
 import { IconButton } from '@/design-system/primitives/IconButton';
 import { Text } from '@/design-system/primitives/Text';
-import { ScreenHeader } from '@/design-system/layouts/ScreenHeader';
+import { ObraHeader } from '@/components/obra/ObraHeader';
 import { colors } from '@/design-system/tokens/colors';
 import { radius } from '@/design-system/tokens/radius';
 import { spacing } from '@/design-system/tokens/spacing';
@@ -78,7 +78,6 @@ async function fetchMessages(workId: string, cursor?: string) {
 
 export default function ChatScreen() {
   const params = useLocalSearchParams<{ workId: string }>();
-  const router = useRouter();
   const workId = typeof params.workId === 'string' ? params.workId : '';
   const userId = useSessionStore((s) => s.user?.id ?? '');
   const isOnline = useConnectivityStore((s) => s.isOnline);
@@ -262,20 +261,13 @@ export default function ChatScreen() {
 
   return (
     <View style={styles.root}>
-      <Stack.Screen options={{ headerShown: false, title: 'Chat' }} />
-      <ScreenHeader
-        title="Chat"
-        leftAction={{
-          icon: ChevronLeft,
-          onPress: () => router.back(),
-          accessibilityLabel: 'Voltar',
-        }}
-      />
+      <Stack.Screen options={{ headerShown: false, title: 'Conversa' }} />
+      <ObraHeader title="Conversa" subtitle="engenheiro responsável" />
 
       {!isOnline ? (
         <View style={styles.offlineBanner}>
-          <Text variant="body" color="warning" style={styles.offlineText}>
-            Sem conexao — mensagens serao enviadas quando voltar
+          <Text variant="body" color="warningText" style={styles.offlineText}>
+            Sem conexão — mensagens serão enviadas quando voltar
           </Text>
         </View>
       ) : null}

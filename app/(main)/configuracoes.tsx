@@ -1,5 +1,4 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { DrawerActions, useNavigation } from '@react-navigation/native';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { Lock, Menu, RefreshCw } from 'lucide-react-native';
@@ -36,7 +35,6 @@ const pwdSchema = z
 type PwdForm = z.infer<typeof pwdSchema>;
 
 export default function ConfiguracoesScreen() {
-  const navigation = useNavigation();
   const user = useSessionStore((s) => s.user);
   const pendingCount = useSyncStore((s) => s.pendingCount);
   const setMustChangePassword = useSessionStore((s) => s.setMustChangePassword);
@@ -62,11 +60,6 @@ export default function ConfiguracoesScreen() {
     <ScreenContainer scrollable background="muted">
       <ScreenHeader
         title="Configurações"
-        leftAction={{
-          icon: Menu,
-          onPress: () => navigation.dispatch(DrawerActions.openDrawer()),
-          accessibilityLabel: 'Abrir menu',
-        }}
       />
 
       <FormSection title="Conta">
