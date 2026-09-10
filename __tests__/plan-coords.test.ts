@@ -1,4 +1,11 @@
-import { PLAN_LOGICAL_SIZE, asCoord, logicalToView, planFrame, viewToLogical } from '@/lib/plan/coords';
+import {
+  PLAN_LOGICAL_SIZE,
+  asCoord,
+  frameFromStoredGeometry,
+  logicalToView,
+  planFrame,
+  viewToLogical,
+} from '@/lib/plan/coords';
 
 /**
  * A conversão entre o quadro lógico da obra e a planta na tela.
@@ -166,5 +173,56 @@ describe('encaixe da planta no quadro lógico', () => {
       offsetX: 0,
       offsetY: 0,
     });
+  });
+});
+
+/**
+ * A geometria gravada pelo portal no import.
+ *
+ * Este é o conserto do defeito que colocava um poste marcado no campo até 77 m
+ * fora do lugar no portal: o Android reporta o tamanho da VIEW em pixels, o
+ * portal usa a página em pontos, e os dois montavam quadros lógicos diferentes
+ * a partir da mesma fórmula. Com a geometria vinda do servidor, não há duas
+ * contas para divergir.
+ */
+describe('geometria vinda do snapshot', () => {
+  // Uma A2 paisagem em render_version 1: 1684x1191 pontos, fator preso em 2.
+  const gravada = {
+    frame: { width: 3368, height: 2382, offsetX: 1316, offsetY: 1809 },
+  };
+
+  it('a gravada ganha do tamanho que o aparelho reporta', () => {
+    // 2802x1981 é o que o Android devolve para essa mesma página: 1,66x maior.
+    const comChute = planFrame(2802, 1981, 1, null);
+    const comGravada = planFrame(2802, 1981, 1, gravada);
+
+    expect(comGravada).toEqual(gravada.frame);
+    expect(comChute).not.toEqual(gravada.frame);
+  });
+
+  it('sem geometria gravada, segue deduzindo como antes', () => {
+    expect(planFrame(1684, 1191, 1, null)).toEqual({
+      width: 3368,
+      height: 2382,
+      offsetX: 1316,
+      offsetY: 1809,
+    });
+  });
+
+  it('geometria pela metade é descartada, não usada torta', () => {
+    expect(frameFromStoredGeometry(null)).toBeNull();
+    expect(frameFromStoredGeometry({ frame: null })).toBeNull();
+    expect(frameFromStoredGeometry({ frame: { width: 3368 } })).toBeNull();
+    expect(
+      frameFromStoredGeometry({ frame: { width: 0, height: 2382, offsetX: 0, offsetY: 0 } }),
+    ).toBeNull();
+  });
+
+  it('o poste cai no mesmo ponto que o portal calcula', () => {
+    // P-01 da prancha real: (2393.76, 3333.2) no quadro lógico.
+    const frame = planFrame(2802, 1981, 1, gravada);
+    const { left, top } = logicalToView(2393.76, 3333.2, 1000, 707, frame);
+    expect(left / 1000).toBeCloseTo(0.32, 3);
+    expect(top / 707).toBeCloseTo(0.64, 3);
   });
 });

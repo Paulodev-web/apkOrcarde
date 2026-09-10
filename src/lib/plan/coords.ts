@@ -40,11 +40,45 @@ const QUADRO_INTEIRO: PlanFrame = {
   offsetY: 0,
 };
 
+/**
+ * A geometria que o portal gravou no snapshot durante a importacao.
+ *
+ * `work_project_snapshot.plan_geometry`. Quando existe, ela MANDA: foi
+ * calculada uma vez, do lado do servidor, a partir da pagina em pontos com a
+ * rotacao ja aplicada. O caminho de baixo (deduzir pelo que o `onLoadComplete`
+ * reporta) e um chute que o Android erra por 1,66x numa A2, porque ele devolve
+ * o tamanho da VIEW em pixels, nao o da pagina.
+ */
+export type StoredPlanGeometry = {
+  frame?: { width?: number; height?: number; offsetX?: number; offsetY?: number } | null;
+} | null;
+
+export function frameFromStoredGeometry(geometry: StoredPlanGeometry): PlanFrame | null {
+  const f = geometry?.frame;
+  if (!f) return null;
+  const { width, height, offsetX, offsetY } = f;
+  if (
+    typeof width !== 'number' || !(width > 0) ||
+    typeof height !== 'number' || !(height > 0) ||
+    typeof offsetX !== 'number' || !Number.isFinite(offsetX) ||
+    typeof offsetY !== 'number' || !Number.isFinite(offsetY)
+  ) {
+    return null;
+  }
+  return { width, height, offsetX, offsetY };
+}
+
 export function planFrame(
   pageW: number,
   pageH: number,
   renderVersion: number | null | undefined,
+  stored?: StoredPlanGeometry,
 ): PlanFrame {
+  // Geometria gravada no import ganha de tudo, inclusive do tamanho de pagina
+  // que o proprio aparelho reporta.
+  const doServidor = frameFromStoredGeometry(stored ?? null);
+  if (doServidor) return doServidor;
+
   if (!(pageW > 0) || !(pageH > 0)) return QUADRO_INTEIRO;
 
   let width: number;

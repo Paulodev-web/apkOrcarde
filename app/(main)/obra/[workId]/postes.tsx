@@ -21,7 +21,13 @@ import { radius } from '@/design-system/tokens/radius';
 import { spacing } from '@/design-system/tokens/spacing';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { NovoPosteSheet } from '@/components/obra/NovoPosteSheet';
-import { asCoord, logicalToView, planFrame, viewToLogical } from '@/lib/plan/coords';
+import {
+  asCoord,
+  logicalToView,
+  planFrame,
+  viewToLogical,
+  type StoredPlanGeometry,
+} from '@/lib/plan/coords';
 import { outboxEmitter } from '@/lib/offline/outbox';
 import { captureException } from '@/lib/sentry';
 import { ensureProjectPdf, getLocalProjectPdf, type CachedPdf } from '@/lib/project/pdf-cache';
@@ -88,7 +94,16 @@ function planRenderScale(viewportW: number, ratio: number): number {
   return Math.max(1, Math.round(s * 10) / 10);
 }
 
-type Snapshot = { storagePath: string; renderVersion: number | null };
+type Snapshot = {
+  storagePath: string;
+  renderVersion: number | null;
+  /**
+   * Geometria da prancha resolvida pelo portal no momento do import. Nula em
+   * obra importada antes disso: aí o viewport cai no caminho antigo, que deduz
+   * do que o `onLoadComplete` reporta.
+   */
+  planGeometry: StoredPlanGeometry;
+};
 
 /** Chave única da consulta de marcações, usada para ler e para escrever no cache. */
 const marksKey = (workId: string) => ['poles', 'marks', workId] as const;
@@ -101,13 +116,14 @@ type PlanMarks = {
 async function fetchSnapshot(workId: string): Promise<Snapshot | null> {
   const { data, error } = await supabase
     .from('work_project_snapshot')
-    .select('pdf_storage_path, render_version')
+    .select('pdf_storage_path, render_version, plan_geometry')
     .eq('work_id', workId)
     .maybeSingle();
   if (error || !data?.pdf_storage_path) return null;
   return {
     storagePath: data.pdf_storage_path as string,
     renderVersion: (data.render_version as number | null) ?? null,
+    planGeometry: (data.plan_geometry as StoredPlanGeometry) ?? null,
   };
 }
 
@@ -274,8 +290,9 @@ export default function PostesScreen() {
         pageSize?.width ?? 0,
         pageSize?.height ?? 0,
         snapshotQuery.data?.renderVersion ?? null,
+        snapshotQuery.data?.planGeometry ?? null,
       ),
-    [pageSize, snapshotQuery.data?.renderVersion],
+    [pageSize, snapshotQuery.data?.renderVersion, snapshotQuery.data?.planGeometry],
   );
 
   /**
