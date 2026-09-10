@@ -47,7 +47,8 @@ async function fetchCrewOptions(workId: string): Promise<CrewOption[]> {
     .eq('work_id', workId)
     .eq('is_active', true);
 
-  if (error || !data) return [];
+  if (error) throw new Error(error.message);
+  if (!data) return [];
 
   const options: CrewOption[] = [];
   for (const team of data as Array<{

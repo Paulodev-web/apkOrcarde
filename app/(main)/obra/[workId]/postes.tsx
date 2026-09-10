@@ -21,6 +21,7 @@ import { radius } from '@/design-system/tokens/radius';
 import { spacing } from '@/design-system/tokens/spacing';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { NovoPosteSheet, type PosteDoProjeto } from '@/components/obra/NovoPosteSheet';
+import { readCachedMarks, writeCachedMarks } from '@/lib/plan/marks-cache';
 import {
   asCoord,
   logicalToView,
@@ -178,6 +179,12 @@ async function fetchPlanMarks(workId: string): Promise<PlanMarks> {
   // Lançando, o React Query mantém o último resultado bom na tela, marca
   // `isError` e tenta de novo sozinho. E o erro passa a existir para ser lido.
   if (installed.error || planned.error) {
+    // Antes de desistir, a última leitura boa guardada no aparelho. É o que faz
+    // a planta abrir com os postes no canteiro sem sinal, em vez de abrir vazia
+    // e parecer que os registros sumiram.
+    const guardado = readCachedMarks<PlanMarks>(workId);
+    if (guardado) return guardado;
+
     const e = installed.error ?? planned.error;
     // Qual das duas caiu, e por quê. Sai no console do Metro em desenvolvimento,
     // que é onde dá para ler enquanto se reproduz o problema no aparelho.
@@ -189,10 +196,12 @@ async function fetchPlanMarks(workId: string): Promise<PlanMarks> {
     throw new Error(e?.message ?? 'Falha ao carregar os postes da planta.');
   }
 
-  return {
+  const marks: PlanMarks = {
     installed: (installed.data ?? []) as WorkPoleInstallation[],
     planned: (planned.data ?? []) as WorkProjectPost[],
   };
+  writeCachedMarks(workId, marks);
+  return marks;
 }
 
 /**

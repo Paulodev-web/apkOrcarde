@@ -30,7 +30,11 @@ async function fetchTeamRows(workId: string): Promise<Row[]> {
     .eq('work_id', workId)
     .eq('is_active', true);
 
-  if (error || !data) return [];
+  // Falha de leitura não é "obra sem equipe". Lançando, o React Query mantém o
+  // último resultado bom na tela, marca `isError` e tenta de novo sozinho; se
+  // engolisse, a tela afirmaria com confiança que ninguém está alocado.
+  if (error) throw new Error(error.message);
+  if (!data) return [];
 
   const rows: Row[] = [];
   for (const team of data as {

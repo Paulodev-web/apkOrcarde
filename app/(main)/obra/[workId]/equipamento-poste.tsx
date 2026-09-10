@@ -32,7 +32,10 @@ async function fetchPrevistos(workId: string): Promise<Previsto[]> {
     .eq('work_id', workId)
     .maybeSingle();
 
-  if (error || !data?.materials_planned) return [];
+  // Erro de leitura não pode virar "o projeto não prevê nada neste poste": o
+  // gerente marcaria tudo como fora do projeto.
+  if (error) throw new Error(error.message);
+  if (!data?.materials_planned) return [];
   const planned = data.materials_planned as { code?: string; name?: string; qty?: number }[];
   return planned.map((m) => ({
     label: m.code ?? m.name ?? 'estrutura',
