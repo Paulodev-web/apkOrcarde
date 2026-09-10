@@ -40,6 +40,13 @@ export type RecordPoleInstallationMediaInput = {
 export type RecordPoleInstallationInput = {
   work_id: string;
   installation_id: string;
+  /**
+   * Poste do projeto que está sendo aceso.
+   *
+   * Quando vem preenchido, o servidor ignora `x_coord`/`y_coord` e copia a
+   * coordenada do projeto. Null é o caminho legado: obra sem projeto importado.
+   */
+  project_post_id?: string | null;
   x_coord: number;
   y_coord: number;
   gps_lat: number | null;

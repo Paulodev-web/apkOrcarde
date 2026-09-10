@@ -2,6 +2,7 @@ import { MapPin } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
 
 import { BottomSheet } from '@/design-system/composed/BottomSheet';
+import { Button } from '@/design-system/primitives/Button';
 import { StatusBadge } from '@/design-system/composed/StatusBadge';
 import { Text } from '@/design-system/primitives/Text';
 import { colors } from '@/design-system/tokens/colors';
@@ -30,9 +31,11 @@ export type SelectedPole =
 type Props = {
   pole: SelectedPole | null;
   onClose: () => void;
+  /** Toque em "levantei este poste", num poste que o projeto previu. */
+  onLevantar?: (pole: Extract<SelectedPole, { kind: 'planned' }>) => void;
 };
 
-export function PoleDetailsSheet({ pole, onClose }: Props) {
+export function PoleDetailsSheet({ pole, onClose, onLevantar }: Props) {
   const title = poleLabel(pole);
 
   return (
@@ -40,7 +43,7 @@ export function PoleDetailsSheet({ pole, onClose }: Props) {
       {pole == null ? null : pole.kind === 'installed' ? (
         <InstalledBody pole={pole} />
       ) : (
-        <PlannedBody pole={pole} />
+        <PlannedBody pole={pole} onLevantar={onLevantar} />
       )}
     </BottomSheet>
   );
@@ -91,7 +94,20 @@ function InstalledBody({
   );
 }
 
-function PlannedBody({ pole }: { pole: Extract<SelectedPole, { kind: 'planned' }> }) {
+/**
+ * A ficha de um poste que ainda nao foi levantado.
+ *
+ * E aqui que o poste cinza vira verde. O gerente nao cria poste nem escolhe
+ * onde ele fica: ele confirma que levantou um que o projeto ja desenhou. Um
+ * botao so, porque nesta tela existe uma acao possivel.
+ */
+function PlannedBody({
+  pole,
+  onLevantar,
+}: {
+  pole: Extract<SelectedPole, { kind: 'planned' }>;
+  onLevantar?: (pole: Extract<SelectedPole, { kind: 'planned' }>) => void;
+}) {
   return (
     <View style={styles.body}>
       {pole.poleType ? (
@@ -102,8 +118,19 @@ function PlannedBody({ pole }: { pole: Extract<SelectedPole, { kind: 'planned' }
         </View>
       ) : null}
       <Text variant="body" color="textSecondary">
-        Poste do projeto. Ainda não foi marcado em campo.
+        Do projeto, ainda não levantado.
       </Text>
+
+      {onLevantar ? (
+        <View style={styles.acao}>
+          <Button variant="primary" onPress={() => onLevantar(pole)}>
+            Levantei este poste
+          </Button>
+          <Text variant="caption" color="textMuted">
+            Pede foto e confirma o tipo no passo seguinte.
+          </Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -126,4 +153,5 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 7 },
+  acao: { gap: spacing.sm, paddingTop: spacing.xs },
 });

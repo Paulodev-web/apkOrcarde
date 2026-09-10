@@ -20,10 +20,26 @@ import type { MediaAsset, WorkPoleInstallation } from '@/types';
 import type { RecordPoleInstallationInput } from '@/types/rpc';
 import { uuidV4 } from '@/utils/uuid';
 
+/** O poste do projeto que está sendo levantado. */
+export type PosteDoProjeto = {
+  id: string;
+  numbering: string | null;
+  poleType: string | null;
+  /** Coordenada do projeto, só para pintar o pino antes de o servidor responder. */
+  x: number;
+  y: number;
+};
+
 type Props = {
   workId: string;
-  /** Onde o dedo encostou, já no quadro lógico 6000×6000. */
-  coords: { x: number; y: number } | null;
+  /**
+   * O poste do projeto que o gerente tocou. Null fecha a folha.
+   *
+   * Não existe mais o caminho de "marcar onde o dedo encostou": o poste já foi
+   * desenhado no orçamento, e o campo acende um que existe. Quem manda na
+   * coordenada é o servidor, que copia a do projeto.
+   */
+  poste: PosteDoProjeto | null;
   onClose: () => void;
   /**
    * Entrega o poste recém-criado para a tela pintar o pino na hora.
@@ -42,7 +58,7 @@ type Props = {
  * no canteiro pode não haver céu aberto, e perder o registro por causa disso
  * seria pior que registrar sem coordenada.
  */
-export function NovoPosteSheet({ workId, coords, onClose, onSaved }: Props) {
+export function NovoPosteSheet({ workId, poste, onClose, onSaved }: Props) {
   const [numeracao, setNumeracao] = useState('');
   const [tipo, setTipo] = useState('');
   const [foto, setFoto] = useState<MediaAsset | null>(null);
@@ -50,22 +66,30 @@ export function NovoPosteSheet({ workId, coords, onClose, onSaved }: Props) {
   const [buscandoGps, setBuscandoGps] = useState(false);
   const [salvando, setSalvando] = useState(false);
 
-  const aberto = coords != null;
+  const aberto = poste != null;
 
+  // Abrir a folha faz três coisas: preenche o que o projeto já sabe, limpa o
+  // que sobrou da vez anterior, e sai atrás do GPS. Fechar limpa tudo.
   useEffect(() => {
-    if (!aberto) {
+    if (!poste) {
       setNumeracao('');
       setTipo('');
       setFoto(null);
       setGps(null);
       return;
     }
+
+    // Numeração e tipo nascem do projeto. O gerente só corrige se o que ele
+    // levantou for diferente do previsto, o que acontece e precisa caber.
+    setNumeracao(poste.numbering ?? '');
+    setTipo(poste.poleType ?? '');
+
     setBuscandoGps(true);
     void captureGps()
       .then((reading) => setGps(reading))
       .catch(() => setGps(null))
       .finally(() => setBuscandoGps(false));
-  }, [aberto]);
+  }, [poste]);
 
   const tirarFoto = useCallback(async () => {
     const asset = await pickImage('camera');
@@ -73,7 +97,7 @@ export function NovoPosteSheet({ workId, coords, onClose, onSaved }: Props) {
   }, []);
 
   const salvar = useCallback(async () => {
-    if (!coords || !foto) return;
+    if (!poste || !foto) return;
     setSalvando(true);
     try {
       const clientEventId = uuidV4();
@@ -84,13 +108,17 @@ export function NovoPosteSheet({ workId, coords, onClose, onSaved }: Props) {
       const payload: RecordPoleInstallationInput = {
         work_id: workId,
         installation_id: installationId,
-        x_coord: Math.round(coords.x),
-        y_coord: Math.round(coords.y),
+        project_post_id: poste.id,
+        // Vão junto só para o caso de o servidor não achar o poste do projeto.
+        // Quem manda é ele: a RPC sobrescreve as duas com a coordenada do
+        // projeto, e é isso que impede o aparelho e o portal de divergirem.
+        x_coord: Math.round(poste.x),
+        y_coord: Math.round(poste.y),
         gps_lat: gps?.latitude ?? null,
         gps_lng: gps?.longitude ?? null,
         gps_accuracy_meters: gps?.accuracy ?? null,
-        numbering: numeracao.trim() || null,
-        pole_type: tipo.trim() || null,
+        numbering: numeracao.trim() || poste.numbering,
+        pole_type: tipo.trim() || poste.poleType,
         notes: null,
         // Hora do aparelho, não da sincronização: preserva a linha do tempo
         // real quando o registro passa o dia inteiro na fila.
@@ -128,6 +156,7 @@ export function NovoPosteSheet({ workId, coords, onClose, onSaved }: Props) {
         id: installationId,
         work_id: workId,
         created_by: '',
+        project_post_id: poste.id,
         x_coord: payload.x_coord,
         y_coord: payload.y_coord,
         gps_lat: payload.gps_lat,
@@ -148,7 +177,7 @@ export function NovoPosteSheet({ workId, coords, onClose, onSaved }: Props) {
     } finally {
       setSalvando(false);
     }
-  }, [coords, foto, workId, gps, numeracao, tipo, onSaved]);
+  }, [poste, foto, workId, gps, numeracao, tipo, onSaved]);
 
   const gpsRuim = gps != null && gps.accuracy != null && gps.accuracy > POLE_LIMITS.GPS_LOW_ACCURACY_METERS;
 
@@ -158,7 +187,7 @@ export function NovoPosteSheet({ workId, coords, onClose, onSaved }: Props) {
         <View style={styles.linha}>
           <MapPin size={18} color={colors.primary} strokeWidth={2} />
           <Text variant="caption" color="textSecondary" style={styles.flex}>
-            {coords ? `na planta em ${Math.round(coords.x)}, ${Math.round(coords.y)}` : ''}
+            {poste?.numbering ? `${poste.numbering} · conforme o projeto` : 'conforme o projeto'}
           </Text>
         </View>
 

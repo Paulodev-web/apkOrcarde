@@ -128,6 +128,8 @@ export type WorkPoleInstallation = {
   id: string;
   work_id: string;
   created_by: string;
+  /** Poste do projeto que este acendeu. Null: obra sem projeto, ou registro antigo. */
+  project_post_id?: string | null;
   x_coord: number;
   y_coord: number;
   gps_lat: number | null;

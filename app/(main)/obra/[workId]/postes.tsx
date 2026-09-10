@@ -20,12 +20,11 @@ import { colors } from '@/design-system/tokens/colors';
 import { radius } from '@/design-system/tokens/radius';
 import { spacing } from '@/design-system/tokens/spacing';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
-import { NovoPosteSheet } from '@/components/obra/NovoPosteSheet';
+import { NovoPosteSheet, type PosteDoProjeto } from '@/components/obra/NovoPosteSheet';
 import {
   asCoord,
   logicalToView,
   planFrame,
-  viewToLogical,
   type StoredPlanGeometry,
 } from '@/lib/plan/coords';
 import { outboxEmitter } from '@/lib/offline/outbox';
@@ -158,7 +157,7 @@ async function fetchPlanMarks(workId: string): Promise<PlanMarks> {
     supabase
       .from('work_pole_installations')
       .select(
-        'id, work_id, created_by, x_coord, y_coord, gps_lat, gps_lng, gps_accuracy_meters, numbering, pole_type, notes, installed_at, status, removed_at, removed_by, client_event_id, created_at',
+        'id, work_id, created_by, project_post_id, x_coord, y_coord, gps_lat, gps_lng, gps_accuracy_meters, numbering, pole_type, notes, installed_at, status, removed_at, removed_by, client_event_id, created_at',
       )
       .eq('work_id', workId)
       .eq('status', 'installed'),
@@ -216,7 +215,7 @@ export default function PostesScreen() {
   const [pageSize, setPageSize] = useState<{ width: number; height: number } | null>(null);
   const [viewport, setViewport] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   const [selected, setSelected] = useState<SelectedPole | null>(null);
-  const [novoPoste, setNovoPoste] = useState<{ x: number; y: number } | null>(null);
+  const [novoPoste, setNovoPoste] = useState<PosteDoProjeto | null>(null);
   const planScale = useSharedValue(1);
   const [mostrarDica, setMostrarDica] = useState(true);
 
@@ -283,6 +282,25 @@ export default function PostesScreen() {
   // vazia cria listas novas e faz o viewport reavaliar a abertura à toa.
   const installed = useMemo(() => marksQuery.data?.installed ?? [], [marksQuery.data]);
   const planned = useMemo(() => marksQuery.data?.planned ?? [], [marksQuery.data]);
+
+  /**
+   * Poste de projeto que já foi aceso sai do cinza.
+   *
+   * Sem isto o pino verde e o anel cinza ficariam empilhados no mesmo ponto, e
+   * o gerente poderia tocar no cinza de um poste que ele acabou de levantar.
+   * A contagem do cabeçalho continua usando `planned` inteiro, porque ela fala
+   * do projeto, não do que falta.
+   */
+  const acesos = useMemo(
+    () =>
+      new Set(
+        installed
+          .map((p) => p.project_post_id)
+          .filter((id): id is string => typeof id === 'string' && id.length > 0),
+      ),
+    [installed],
+  );
+  const pendentes = useMemo(() => planned.filter((p) => !acesos.has(p.id)), [planned, acesos]);
 
   // O cabeçalho só afirma uma contagem quando ele tem uma contagem para
   // afirmar. Com a leitura falhando e sem dado anterior, "0 de 9 postes" seria
@@ -412,20 +430,23 @@ export default function PostesScreen() {
         const pos = logicalToView(asCoord(pole.x_coord), asCoord(pole.y_coord), content.contentW, content.contentH, frame);
         considerar(pos.left, pos.top, () => onSelectInstalled(pole));
       }
-      for (const pole of planned) {
+      for (const pole of pendentes) {
         const pos = logicalToView(asCoord(pole.x_coord), asCoord(pole.y_coord), content.contentW, content.contentH, frame);
         considerar(pos.left, pos.top, () => onSelectPlanned(pole));
       }
 
+      // Tocar no vazio não faz nada, de propósito.
+      //
+      // Aqui existia a criação de poste por toque livre: onde o dedo encostasse,
+      // nascia um poste. Isso saiu junto com o modelo novo — o poste vem do
+      // orçamento, e o campo acende um que já existe. De luva, sob sol, o toque
+      // livre virava poste fantasma; e a coordenada que ele produzia era a
+      // origem da divergência entre o aparelho e o portal.
       if (melhor) {
         (melhor as { pick: () => void }).pick();
-        return;
       }
-
-      const logico = viewToLogical(contentX, contentY, content.contentW, content.contentH, frame);
-      setNovoPoste(logico);
     },
-    [content, frame, installed, planned, onSelectInstalled, onSelectPlanned],
+    [content, frame, installed, pendentes, onSelectInstalled, onSelectPlanned],
   );
 
   const temPlantaLocal = pdf != null;
@@ -567,7 +588,7 @@ export default function PostesScreen() {
                 />
 
                 <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
-                  {planned.map((pole) => {
+                  {pendentes.map((pole) => {
                     const pos = logicalToView(
                       asCoord(pole.x_coord),
                       asCoord(pole.y_coord),
@@ -620,7 +641,7 @@ export default function PostesScreen() {
             {mostrarDica ? (
               <View style={styles.dica} pointerEvents="none">
                 <Text variant="caption" color="textInverse">
-                  Toque num vazio para marcar um poste
+                  Toque num poste cinza para levantá-lo
                 </Text>
               </View>
             ) : null}
@@ -630,11 +651,26 @@ export default function PostesScreen() {
         </View>
       )}
 
-      <PoleDetailsSheet pole={selected} onClose={() => setSelected(null)} />
+      <PoleDetailsSheet
+        pole={selected}
+        onClose={() => setSelected(null)}
+        onLevantar={(pole) => {
+          const doProjeto = pendentes.find((p) => p.id === pole.id);
+          if (!doProjeto) return;
+          setSelected(null);
+          setNovoPoste({
+            id: doProjeto.id,
+            numbering: doProjeto.numbering,
+            poleType: doProjeto.post_type,
+            x: asCoord(doProjeto.x_coord),
+            y: asCoord(doProjeto.y_coord),
+          });
+        }}
+      />
 
       <NovoPosteSheet
         workId={id}
-        coords={novoPoste}
+        poste={novoPoste}
         onClose={() => setNovoPoste(null)}
         onSaved={(pole) => {
           setNovoPoste(null);
