@@ -3,9 +3,7 @@
 import {
   AlertTriangle,
   ChevronRight,
-  FileText,
   Flag,
-  ListChecks,
   MapPin,
   Waves,
   Wrench,
@@ -85,23 +83,10 @@ export function RegistrarSheet({ open, onClose, workId }: Props) {
     },
   ];
 
+  // Diario e Checklist sairam daqui. O diario deixou de ser formulario e virou
+  // leitura: a plataforma monta o dia a partir do que foi registrado, entao nao
+  // ha o que o gerente digitar. O checklist saiu do produto.
   const rows: Row[] = [
-    {
-      icon: FileText,
-      label: 'Diário',
-      hint: 'fecha o dia',
-      tint: colors.textSecondary,
-      bg: colors.neutralBg,
-      href: `/(main)/obra/${workId}/diario`,
-    },
-    {
-      icon: ListChecks,
-      label: 'Checklist',
-      hint: 'marcar item conferido',
-      tint: colors.success,
-      bg: colors.successBg,
-      href: `/(main)/obra/${workId}/checklists`,
-    },
     {
       icon: Flag,
       label: 'Marco',

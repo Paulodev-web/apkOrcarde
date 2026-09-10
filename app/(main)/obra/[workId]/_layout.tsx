@@ -29,11 +29,15 @@ export default function WorkLayout() {
   // de mensagem. Por isso a lista e do que MOSTRA, nao do que esconde.
   const segments = useSegments();
   const atual = segments[segments.length - 1] ?? '';
-  const showFab = atual === '[workId]' || atual === 'registros' || atual === 'equipe';
+  const showFab =
+    atual === 'postes' || atual === '[workId]' || atual === 'registros' || atual === 'equipe';
 
+  // A obra abre na PLANTA, nao num painel de numeros. O gerente abre o app para
+  // trabalhar, e o trabalho dele acontece em cima da prancha: ele toca num poste
+  // cinza e diz que levantou. Numero de resumo vira cabecalho, nao tela.
   const tabs: TabSpec[] = [
-    { name: 'index', label: 'Obra', icon: LayoutGrid },
-    { name: 'registros', label: 'Registros', icon: Rows3 },
+    { name: 'postes', label: 'Obra', icon: LayoutGrid },
+    { name: 'registros', label: 'Dia', icon: Rows3 },
     { name: 'chat', label: 'Conversa', icon: MessageCircle },
     { name: 'equipe', label: 'Equipe', icon: Users },
   ];
@@ -44,13 +48,16 @@ export default function WorkLayout() {
         screenOptions={{ headerShown: false }}
         tabBar={(props) => <FieldTabBar {...props} tabs={tabs} centerGap />}
       >
-        <Tabs.Screen name="index" />
+        <Tabs.Screen name="postes" />
         <Tabs.Screen name="registros" />
         <Tabs.Screen name="chat" />
         <Tabs.Screen name="equipe" />
 
+        {/* `index` so existe para redirecionar quem chega em /obra/{id} direto,
+            por deep link de notificacao ou por historico. */}
+        <Tabs.Screen name="index" options={{ href: null }} />
+
         {/* Fluxos de registro: alcancados pela folha do +, nunca pela barra. */}
-        <Tabs.Screen name="postes" options={{ href: null }} />
         <Tabs.Screen name="equipamento" options={{ href: null }} />
         <Tabs.Screen name="equipamento-poste" options={{ href: null }} />
         <Tabs.Screen name="rede" options={{ href: null }} />

@@ -1,8 +1,8 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useLocalSearchParams } from 'expo-router';
-import { CloudOff, FileQuestion, WifiOff } from 'lucide-react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { AlertTriangle, ChevronRight, CloudOff, FileQuestion, WifiOff } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSharedValue } from 'react-native-reanimated';
 import { PixelRatio, Pressable, StyleSheet, View } from 'react-native';
@@ -127,6 +127,32 @@ async function fetchSnapshot(workId: string): Promise<Snapshot | null> {
   };
 }
 
+type ImpedimentoAberto = { id: string; title: string; severity: string; status: string } | null;
+
+/**
+ * O impedimento em aberto mais recente da obra.
+ *
+ * Aqui por um motivo: antes desta tela existia um painel de resumo que mostrava
+ * "alertas pendentes", e ele saiu quando a obra passou a abrir na planta. Sem
+ * isto, o gerente perderia de vista a obra parada. Mesma ideia da faixa do
+ * portal: quem parou a obra nao deveria precisar navegar ate um lugar para
+ * lembrar disso.
+ */
+async function fetchImpedimento(workId: string): Promise<ImpedimentoAberto> {
+  const { data, error } = await supabase
+    .from('work_alerts')
+    .select('id, title, severity, status')
+    .eq('work_id', workId)
+    .in('status', ['open', 'in_progress'])
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  // Sem sinal a leitura falha e a faixa some. Isso e aceitavel: ela e um
+  // lembrete, nao a fonte da verdade, e quem abriu o impedimento foi ele.
+  if (error) return null;
+  return ((data ?? [])[0] as ImpedimentoAberto) ?? null;
+}
+
 async function fetchPlanMarks(workId: string): Promise<PlanMarks> {
   const [installed, planned] = await Promise.all([
     supabase
@@ -182,6 +208,7 @@ export default function PostesScreen() {
   const { workId } = useLocalSearchParams<{ workId: string }>();
   const id = typeof workId === 'string' ? workId : '';
   const { isOnline } = useNetworkStatus();
+  const router = useRouter();
 
   const [pdf, setPdf] = useState<CachedPdf | null>(() => (id ? getLocalProjectPdf(id) : null));
   const [preparing, setPreparing] = useState(false);
@@ -196,6 +223,12 @@ export default function PostesScreen() {
   const snapshotQuery = useQuery({
     queryKey: ['projectSnapshot', 'pdf', id],
     queryFn: () => fetchSnapshot(id),
+    enabled: id.length > 0,
+  });
+
+  const impedimentoQuery = useQuery({
+    queryKey: ['impedimentoAberto', id],
+    queryFn: () => fetchImpedimento(id),
     enabled: id.length > 0,
   });
 
@@ -402,6 +435,26 @@ export default function PostesScreen() {
     <View style={styles.root}>
       <ObraHeader title="Planta" subtitle={subtitle} />
 
+      {impedimentoQuery.data ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Impedimento aberto: ${impedimentoQuery.data.title}`}
+          onPress={() => router.push(`/(main)/obra/${id}/alertas` as never)}
+          style={styles.impedimentoStrip}
+        >
+          <AlertTriangle size={18} color={colors.danger} strokeWidth={2.2} />
+          <View style={styles.impedimentoTexto}>
+            <Text variant="bodyBold" style={{ color: colors.dangerText }}>
+              Obra parada
+            </Text>
+            <Text variant="caption" style={{ color: colors.dangerText }} numberOfLines={1}>
+              {impedimentoQuery.data.title}
+            </Text>
+          </View>
+          <ChevronRight size={18} color={colors.danger} strokeWidth={2.2} />
+        </Pressable>
+      ) : null}
+
       {snapshotQuery.isLoading && !temPlantaLocal ? (
         <LoadingState label="Abrindo a planta..." />
       ) : semProjeto ? (
@@ -607,6 +660,17 @@ export default function PostesScreen() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surfaceMuted },
   body: { flex: 1, padding: spacing.sm, gap: spacing.sm },
+  impedimentoStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.dangerBg,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.dangerBorder,
+  },
+  impedimentoTexto: { flex: 1, gap: 1 },
   staleStrip: {
     flexDirection: 'row',
     alignItems: 'center',

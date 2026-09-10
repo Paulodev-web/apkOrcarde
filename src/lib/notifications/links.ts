@@ -1,10 +1,14 @@
+/**
+ * Para onde uma notificacao pode levar.
+ *
+ * `/diario` e `/checklists` sairam: o banco ainda tem gatilhos que geram
+ * notificacao apontando para la (decisao de diario, checklist devolvido), e sem
+ * esta lista o app abriria uma tela que nao esta mais na navegacao. Caminho
+ * desconhecido cai na home, que e o comportamento correto para link velho.
+ */
 const VALID_ROUTE_PATTERNS = [
   /^\/obra\/[^/]+\/chat$/,
-  /^\/obra\/[^/]+\/diario\/[^/]+$/,
-  /^\/obra\/[^/]+\/diario$/,
   /^\/obra\/[^/]+\/marcos$/,
-  /^\/obra\/[^/]+\/checklists\/[^/]+$/,
-  /^\/obra\/[^/]+\/checklists$/,
   /^\/obra\/[^/]+\/alertas\/[^/]+$/,
   /^\/obra\/[^/]+\/alertas$/,
   /^\/obra\/[^/]+\/postes$/,
