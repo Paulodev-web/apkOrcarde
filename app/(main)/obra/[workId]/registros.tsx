@@ -3,12 +3,12 @@
 import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
-  CheckCircle2,
-  FileText,
   Flag,
   MapPin,
   RefreshCw,
   Rows3,
+  Waves,
+  Wrench,
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -25,7 +25,7 @@ import { spacing } from '@/design-system/tokens/spacing';
 import { getAllItems } from '@/lib/offline/outbox';
 import { supabase } from '@/lib/supabase/client';
 
-type Kind = 'poste' | 'diario' | 'alerta' | 'marco';
+type Kind = 'poste' | 'equipamento' | 'rede' | 'alerta' | 'marco';
 
 type Entry = {
   id: string;
@@ -38,17 +38,25 @@ type Entry = {
   href?: string;
 };
 
-const FILTERS: { key: Kind | 'all'; label: string }[] = [
+/**
+ * Os filtros sao o dia do gerente, mais a fila.
+ *
+ * Poste, equipamento e rede sao o que ele faz o dia inteiro. "Na fila" e o que
+ * ele confere quando o sinal volta. Impedimento e marco continuam aparecendo em
+ * "Tudo", mas sao raros demais para ocupar um chip.
+ */
+const FILTERS: { key: Kind | 'all' | 'queued'; label: string }[] = [
   { key: 'all', label: 'Tudo' },
   { key: 'poste', label: 'Postes' },
-  { key: 'diario', label: 'Diários' },
-  { key: 'alerta', label: 'Alertas' },
-  { key: 'marco', label: 'Marcos' },
+  { key: 'equipamento', label: 'Equipamento' },
+  { key: 'rede', label: 'Rede' },
+  { key: 'queued', label: 'Na fila' },
 ];
 
 const VISUAL: Record<Kind, { icon: LucideIcon; tint: string; bg: string; border: string }> = {
   poste: { icon: MapPin, tint: colors.primary, bg: colors.infoBg, border: colors.infoBorder },
-  diario: { icon: FileText, tint: colors.textSecondary, bg: colors.neutralBg, border: colors.border },
+  equipamento: { icon: Wrench, tint: colors.success, bg: colors.successBg, border: colors.successBorder },
+  rede: { icon: Waves, tint: colors.info, bg: colors.infoBg, border: colors.infoBorder },
   alerta: { icon: AlertTriangle, tint: colors.danger, bg: colors.dangerBg, border: colors.dangerBorder },
   marco: { icon: Flag, tint: colors.success, bg: colors.successBg, border: colors.successBorder },
 };
@@ -56,28 +64,58 @@ const VISUAL: Record<Kind, { icon: LucideIcon; tint: string; bg: string; border:
 /** Acoes da fila local que aparecem na linha do tempo, e como rotula-las. */
 const QUEUED_KIND: Record<string, { kind: Kind; title: string }> = {
   record_pole_installation: { kind: 'poste', title: 'Poste' },
-  publish_daily_log: { kind: 'diario', title: 'Diário' },
+  record_pole_equipment: { kind: 'equipamento', title: 'Equipamento' },
+  record_network_span: { kind: 'rede', title: 'Trecho de rede' },
   open_alert: { kind: 'alerta', title: 'Alerta' },
   resolve_alert_in_field: { kind: 'alerta', title: 'Alerta resolvido' },
   add_alert_comment: { kind: 'alerta', title: 'Comentário em alerta' },
   report_milestone: { kind: 'marco', title: 'Marco reportado' },
 };
 
+function ResumoNumero({ valor, rotulo }: { valor: number; rotulo: string }) {
+  return (
+    <View style={styles.resumoCartao}>
+      <Text variant="metric" style={styles.resumoValor}>
+        {valor}
+      </Text>
+      <Text variant="caption" color="textSecondary">
+        {rotulo}
+      </Text>
+    </View>
+  );
+}
+
+/** O PostgREST devolve relacao para-um ora como objeto, ora como array de um. */
+function umRelacionado<T>(v: unknown): T | null {
+  if (Array.isArray(v)) return (v[0] as T) ?? null;
+  return (v as T) ?? null;
+}
+
 async function fetchServerEntries(workId: string): Promise<Entry[]> {
-  const [poles, logs, alerts, events] = await Promise.all([
+  const [poles, equipamentos, trechos, alerts, events] = await Promise.all([
     supabase
       .from('work_pole_installations')
-      .select('id, numbering, pole_type, installed_at, created_at')
+      .select('id, numbering, pole_type, installed_at')
       .eq('work_id', workId)
       .eq('status', 'installed')
-      .order('created_at', { ascending: false })
+      .order('installed_at', { ascending: false })
       .limit(30),
     supabase
-      .from('work_daily_logs')
-      .select('id, log_date, status, created_at')
+      .from('work_pole_equipment')
+      .select(
+        'id, installed_at, work_pole_installations:installation_id (numbering), work_pole_equipment_items (label, quantity)',
+      )
       .eq('work_id', workId)
-      .order('created_at', { ascending: false })
-      .limit(20),
+      .order('installed_at', { ascending: false })
+      .limit(30),
+    supabase
+      .from('work_network_spans')
+      .select(
+        'id, installed_at, category, meters, origem:from_post_id (numbering), destino:to_post_id (numbering)',
+      )
+      .eq('work_id', workId)
+      .order('installed_at', { ascending: false })
+      .limit(30),
     supabase
       .from('work_alerts')
       .select('id, title, severity, status, created_at')
@@ -94,25 +132,50 @@ async function fetchServerEntries(workId: string): Promise<Entry[]> {
 
   const out: Entry[] = [];
 
+  // `installed_at` e nao `created_at`: a hora e a do aparelho. Um poste
+  // levantado as 16h38 sem sinal e sincronizado as 19h12 pertence ao dia de
+  // quem o levantou. E a mesma regra que o portal usa para montar o dia.
   for (const p of poles.data ?? []) {
     out.push({
       id: `poste-${p.id}`,
       kind: 'poste',
       title: p.numbering ? `Poste ${p.numbering}` : 'Poste sem numeração',
-      detail: p.pole_type ?? 'instalado',
-      at: p.created_at as string,
+      detail: (p.pole_type as string | null) ?? 'levantado',
+      at: p.installed_at as string,
       href: `/(main)/obra/${workId}/postes`,
     });
   }
 
-  for (const l of logs.data ?? []) {
+  for (const e of equipamentos.data ?? []) {
+    const itens = (e.work_pole_equipment_items ?? []) as { label: string; quantity: number }[];
+    const total = itens.reduce((soma, i) => soma + (Number(i.quantity) || 0), 0);
+    const poste = umRelacionado<{ numbering: string | null }>(e.work_pole_installations)?.numbering;
     out.push({
-      id: `diario-${l.id}`,
-      kind: 'diario',
-      title: `Diário de ${formatDate(l.log_date as string)}`,
-      detail: dailyLogHint(l.status as string),
-      at: l.created_at as string,
-      href: `/(main)/obra/${workId}/diario/${l.id}`,
+      id: `equipamento-${e.id}`,
+      kind: 'equipamento',
+      title: poste
+        ? `${total} estrutura${total === 1 ? '' : 's'} no poste ${poste}`
+        : `${total} estrutura${total === 1 ? '' : 's'} montada${total === 1 ? '' : 's'}`,
+      detail: itens.map((i) => i.label).join(', ') || 'equipamento montado',
+      at: e.installed_at as string,
+      href: `/(main)/obra/${workId}/postes`,
+    });
+  }
+
+  for (const s of trechos.data ?? []) {
+    const origem = umRelacionado<{ numbering: string | null }>(s.origem)?.numbering;
+    const destino = umRelacionado<{ numbering: string | null }>(s.destino)?.numbering;
+    const metros = Number(s.meters ?? 0);
+    out.push({
+      id: `rede-${s.id}`,
+      kind: 'rede',
+      title:
+        origem && destino
+          ? `Trecho ${origem} → ${destino}, ${Math.round(metros)} m`
+          : `Trecho de ${Math.round(metros)} m`,
+      detail: `rede ${s.category as string}`,
+      at: s.installed_at as string,
+      href: `/(main)/obra/${workId}/rede`,
     });
   }
 
@@ -192,7 +255,7 @@ export default function RegistrosScreen() {
   const { workId } = useLocalSearchParams<{ workId: string }>();
   const id = typeof workId === 'string' ? workId : '';
   const router = useRouter();
-  const [filter, setFilter] = useState<Kind | 'all'>('all');
+  const [filter, setFilter] = useState<Kind | 'all' | 'queued'>('all');
   const [refreshing, setRefreshing] = useState(false);
 
   const enabled = id.length > 0;
@@ -210,16 +273,43 @@ export default function RegistrosScreen() {
 
   const entries = useMemo(() => {
     const all = [...(queuedQ.data ?? []), ...(serverQ.data ?? [])];
-    const filtered = filter === 'all' ? all : all.filter((e) => e.kind === filter);
+    const filtered =
+      filter === 'all'
+        ? all
+        : filter === 'queued'
+          ? all.filter((e) => e.queued)
+          : all.filter((e) => e.kind === filter);
     return filtered.sort((a, b) => b.at.localeCompare(a.at));
   }, [serverQ.data, queuedQ.data, filter]);
 
   const groups = useMemo(() => groupByDay(entries), [entries]);
 
+  /**
+   * Os tres numeros do topo sao SEMPRE do dia de hoje, e ignoram o filtro: eles
+   * respondem "o que eu fiz hoje", nao "o que esta na tela". Contam tambem o que
+   * ainda esta na fila, porque para o gerente o poste ja esta de pe.
+   */
+  const hoje = useMemo(() => {
+    const agora = new Date();
+    const doDia = [...(queuedQ.data ?? []), ...(serverQ.data ?? [])].filter((e) => {
+      const d = new Date(e.at);
+      return (
+        d.getFullYear() === agora.getFullYear() &&
+        d.getMonth() === agora.getMonth() &&
+        d.getDate() === agora.getDate()
+      );
+    });
+    const postes = doDia.filter((e) => e.kind === 'poste').length;
+    const trechos = doDia.filter((e) => e.kind === 'rede').length;
+    const equipamentos = doDia.filter((e) => e.kind === 'equipamento').length;
+    return { postes, trechos, equipamentos, total: doDia.length };
+  }, [serverQ.data, queuedQ.data]);
+
   return (
     <View style={styles.root}>
       <ObraHeader
-        title="Registros"
+        title="O dia"
+        subtitle="o que você registrou, sem escrever nada"
         footer={
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
             {FILTERS.map((f) => {
@@ -241,6 +331,17 @@ export default function RegistrosScreen() {
           </ScrollView>
         }
       />
+
+      {hoje.total > 0 ? (
+        <View style={styles.resumoHoje}>
+          <ResumoNumero valor={hoje.postes} rotulo={hoje.postes === 1 ? 'poste' : 'postes'} />
+          <ResumoNumero valor={hoje.trechos} rotulo={hoje.trechos === 1 ? 'trecho' : 'trechos'} />
+          <ResumoNumero
+            valor={hoje.equipamentos}
+            rotulo={hoje.equipamentos === 1 ? 'montagem' : 'montagens'}
+          />
+        </View>
+      ) : null}
 
       {serverQ.isLoading ? (
         <LoadingState />
@@ -336,14 +437,6 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
-function dailyLogHint(status: string): string {
-  const m: Record<string, string> = {
-    pending_approval: 'aguardando aprovação',
-    approved: 'aprovado',
-    rejected: 'devolvido pelo engenheiro',
-  };
-  return m[status] ?? status;
-}
 
 function alertHint(status: string): string {
   const m: Record<string, string> = {
@@ -374,6 +467,23 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.surfaceMuted },
   content: { padding: spacing.xl, paddingBottom: 120, gap: spacing.lg },
 
+  resumoHoje: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.lg,
+  },
+  resumoCartao: {
+    flex: 1,
+    gap: 2,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg - 2,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+  },
+  resumoValor: { fontVariant: ['tabular-nums'] },
   chips: { flexDirection: 'row', gap: spacing.sm, paddingRight: spacing.xl },
   chip: {
     paddingHorizontal: spacing.lg,
