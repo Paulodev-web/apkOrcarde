@@ -13,6 +13,8 @@ import {
   processNext,
   recoverStuckItems,
 } from './outbox';
+import { handleRecordPoleEquipment } from './handlers/equipment.handler';
+import { handleRecordNetworkSpan } from './handlers/span.handler';
 import { getHandler, registerHandler } from './sync-handlers';
 import { handleSendMessage } from './handlers/chat.handler';
 import { handlePublishDailyLog } from './handlers/daily-log.handler';
@@ -37,6 +39,8 @@ registerHandler('set_checklist_in_progress', handleSetChecklistInProgress);
 registerHandler('open_alert', handleOpenAlert);
 registerHandler('resolve_alert_in_field', handleResolveAlert);
 registerHandler('add_alert_comment', handleAddAlertComment);
+registerHandler('record_pole_equipment', handleRecordPoleEquipment);
+registerHandler('record_network_span', handleRecordNetworkSpan);
 
 let running = false;
 let wakeTimer: ReturnType<typeof setTimeout> | null = null;
@@ -97,6 +101,15 @@ async function processQueue(): Promise<void> {
     useSyncStore.getState().setSyncing(false);
     await refreshPendingCount();
   }
+}
+
+/**
+ * Roda um ciclo de sincronizacao agora, sem esperar o proximo despertar.
+ * Usado pelo "Tentar agora" da tela de Fila — o gerente no canteiro costuma
+ * saber antes do NetInfo que o sinal voltou.
+ */
+export async function runSyncCycle(): Promise<void> {
+  await processQueue();
 }
 
 async function refreshPendingCount(): Promise<void> {

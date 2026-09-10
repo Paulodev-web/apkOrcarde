@@ -5,6 +5,7 @@ import { MEDIA_LIMITS } from '@/constants/limits';
 import type { MediaAsset } from '@/types';
 
 import { compressImage } from './compress';
+import { persistPendingMedia } from './pending-store';
 
 export async function pickImage(source: 'camera' | 'gallery'): Promise<MediaAsset | null> {
   const hasPermission = await requestPermission(source);
@@ -30,7 +31,9 @@ export async function pickImage(source: 'camera' | 'gallery'): Promise<MediaAsse
   const fileName = asset.fileName ?? `foto_${Date.now()}.${ext}`;
 
   return {
-    uri: compressed.uri,
+    // Sai do cache do manipulador antes de virar item de fila: no canteiro
+    // essa foto pode esperar dias por sinal, e o sistema limpa cache.
+    uri: persistPendingMedia(compressed.uri, fileName),
     type: 'image',
     fileName,
     mimeType: asset.mimeType ?? 'image/jpeg',
@@ -63,7 +66,7 @@ export async function pickVideo(source: 'camera' | 'gallery'): Promise<MediaAsse
   const fileName = asset.fileName ?? `video_${Date.now()}.${ext}`;
 
   return {
-    uri: asset.uri,
+    uri: persistPendingMedia(asset.uri, fileName),
     type: 'video',
     fileName,
     mimeType: asset.mimeType ?? 'video/mp4',

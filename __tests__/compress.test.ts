@@ -1,15 +1,37 @@
 import * as ImageManipulator from 'expo-image-manipulator';
 
+const mockFileSizes = new Map<string, number>();
+
+// O tamanho sai do sistema de arquivos, nao de `fetch('file://...')`: o fetch
+// do React Native nao le arquivo local nesta versao e devolvia 0 sempre.
+jest.mock('expo-file-system', () => ({
+  File: class {
+    uri: string;
+    constructor(uri: string) {
+      this.uri = uri;
+    }
+    get exists(): boolean {
+      return mockFileSizes.has(this.uri);
+    }
+    get size(): number {
+      return mockFileSizes.get(this.uri) ?? 0;
+    }
+  },
+}));
+
 import { compressImage } from '@/lib/media/compress';
 
 const mockManipulate = ImageManipulator.manipulateAsync as jest.Mock;
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockFileSizes.clear();
+  mockFileSizes.set('compressed-uri', 250_000);
 
-  global.fetch = jest.fn(async () => ({
-    blob: async () => ({ size: 250_000 }),
-  })) as unknown as typeof fetch;
+  // Se alguem voltar a usar fetch para ler arquivo local, o teste denuncia.
+  global.fetch = jest.fn(async () => {
+    throw new Error('Network request failed');
+  }) as unknown as typeof fetch;
 });
 
 describe('compressImage', () => {
@@ -72,12 +94,25 @@ describe('compressImage', () => {
     expect(result.height).toBe(0);
   });
 
-  it('returns fileSize from the compressed blob', async () => {
+  it('le o tamanho do arquivo pelo sistema de arquivos, nao por fetch', async () => {
     mockManipulate
       .mockResolvedValueOnce({ uri: 'probe-uri', width: 800, height: 600 })
       .mockResolvedValueOnce({ uri: 'compressed-uri', width: 800, height: 600 });
 
     const result = await compressImage('file:///photo.jpg');
+
     expect(result.fileSize).toBe(250_000);
+    // `fetch` neste teste sempre estoura: se o codigo o usasse, o tamanho
+    // voltaria zerado como acontecia no aparelho.
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('arquivo inexistente devolve tamanho zero sem quebrar', async () => {
+    mockManipulate
+      .mockResolvedValueOnce({ uri: 'probe-uri', width: 800, height: 600 })
+      .mockResolvedValueOnce({ uri: 'sumiu-uri', width: 800, height: 600 });
+
+    const result = await compressImage('file:///photo.jpg');
+    expect(result.fileSize).toBe(0);
   });
 });
