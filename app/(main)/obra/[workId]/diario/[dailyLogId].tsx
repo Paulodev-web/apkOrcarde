@@ -109,6 +109,13 @@ export default function DailyLogDetailScreen() {
     enabled: workId.length > 0,
   });
 
+  // `crew_present` guarda IDs de ficha. Quem transforma em nome legivel e a leitura.
+  const crewNames = useMemo(() => {
+    const mapa: Record<string, string> = {};
+    for (const membro of crewQuery.data ?? []) mapa[membro.id] = membro.name;
+    return mapa;
+  }, [crewQuery.data]);
+
   const snapshotQuery = useQuery({
     queryKey: ['projectSnapshot', workId],
     queryFn: () => fetchProjectSnapshot(workId),
@@ -224,7 +231,7 @@ export default function DailyLogDetailScreen() {
           submitting={submitting}
         />
       ) : log ? (
-        <DailyLogReadOnly log={log} revisions={revisions} />
+        <DailyLogReadOnly log={log} revisions={revisions} crewNames={crewNames} />
       ) : null}
     </View>
   );

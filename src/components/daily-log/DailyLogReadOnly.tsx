@@ -11,9 +11,17 @@ type Props = {
   log: WorkDailyLog;
   revisions: WorkDailyLogRevision[];
   approverName?: string | null;
+  /**
+   * ID da ficha para nome, montado pela tela a partir da equipe da obra.
+   *
+   * `crew_present` guarda IDs, porque e isso que a folha de presenca espera. Quem
+   * traduz para nome e a leitura. Revisao antiga, gravada quando o campo levava
+   * nome, cai no fallback e continua legivel.
+   */
+  crewNames?: Record<string, string>;
 };
 
-export function DailyLogReadOnly({ log, revisions, approverName }: Props) {
+export function DailyLogReadOnly({ log, revisions, approverName, crewNames }: Props) {
   const current = revisions.find((r) => r.id === log.current_revision_id) ?? revisions[0];
   if (!current) return null;
 
@@ -39,9 +47,9 @@ export function DailyLogReadOnly({ log, revisions, approverName }: Props) {
 
       {/* Equipe presente */}
       <Section title="Equipe presente">
-        {current.crew_present.map((name, i) => (
+        {current.crew_present.map((entry, i) => (
           <Text key={i} style={styles.bodyText}>
-            {name}
+            {crewNames?.[entry] ?? entry}
           </Text>
         ))}
       </Section>
