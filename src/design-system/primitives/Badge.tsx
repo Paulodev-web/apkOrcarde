@@ -24,12 +24,14 @@ const BG: Record<BadgeVariant, ColorKey> = {
   neutral: 'neutralBg',
 };
 
+// Texto do badge e o degrau -700, nao o -600: -600 e preenchimento com branco
+// por cima. Lido sobre o fundo -50, o -700 e o que passa em AA.
 const FG: Record<BadgeVariant, ColorKey> = {
-  success: 'success',
-  warning: 'warning',
-  danger: 'danger',
-  info: 'info',
-  neutral: 'neutral',
+  success: 'successText',
+  warning: 'warningText',
+  danger: 'dangerText',
+  info: 'infoText',
+  neutral: 'textSecondary',
 };
 
 export function Badge({ variant, children, icon: Icon, style }: Props) {
@@ -41,8 +43,8 @@ export function Badge({ variant, children, icon: Icon, style }: Props) {
         style,
       ]}
     >
-      {Icon ? <Icon size={14} color={colors[FG[variant]]} strokeWidth={2} /> : null}
-      <Text variant="caption" color={FG[variant]}>
+      {Icon ? <Icon size={15} color={colors[FG[variant]]} strokeWidth={2} /> : null}
+      <Text variant="captionBold" color={FG[variant]}>
         {children}
       </Text>
     </View>
@@ -54,8 +56,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 4,
     borderRadius: radius.full,
     gap: spacing.xs,
   },

@@ -1,9 +1,8 @@
 import type { LucideIcon } from 'lucide-react-native';
-import { Pressable, StyleSheet } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Pressable, StyleSheet, View } from 'react-native';
 
 import { Text } from '@/design-system/primitives/Text';
-import { colors, gradients } from '@/design-system/tokens/colors';
+import { colors } from '@/design-system/tokens/colors';
 import { radius } from '@/design-system/tokens/radius';
 import { shadows } from '@/design-system/tokens/shadows';
 import { spacing } from '@/design-system/tokens/spacing';
@@ -16,61 +15,51 @@ type Props = {
   accessibilityLabel: string;
   position?: Position;
   extended?: { label: string };
+  /** Distancia do rodape. `bottom-center` sobe para pousar sobre a barra. */
+  bottom?: number;
 };
 
+/**
+ * Acao de registro. Chapado em accent-600 — sem degrade, igual ao botao.
+ *
+ * O anel na cor do fundo da tela e o que separa o FAB da barra de navegacao
+ * quando ele pousa em cima dela (`bottom-center`), sem precisar de degrade
+ * nem de sombra pesada.
+ */
 export function FAB({
   icon: Icon,
   onPress,
   accessibilityLabel,
   position = 'bottom-right',
   extended,
+  bottom,
 }: Props) {
-  const bottom = spacing.xxl;
-  const horizontal = spacing.xxl;
+  const b = bottom ?? spacing.xxl;
 
   const posStyle =
     position === 'bottom-center'
-      ? { bottom, alignSelf: 'center' as const }
-      : { bottom, right: horizontal };
-
-  if (extended) {
-    return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={accessibilityLabel}
-        onPress={onPress}
-        style={[styles.abs, posStyle]}
-      >
-        <LinearGradient
-          colors={gradients.fab}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={[styles.extended, shadows.md]}
-        >
-          <Icon size={24} color={colors.textInverse} strokeWidth={2} />
-          <Text variant="bodyBold" color="textInverse" style={styles.extLabel}>
-            {extended.label}
-          </Text>
-        </LinearGradient>
-      </Pressable>
-    );
-  }
+      ? { bottom: b, alignSelf: 'center' as const }
+      : { bottom: b, right: spacing.xxl };
 
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
-      style={[styles.abs, posStyle]}
+      style={({ pressed }) => [styles.abs, posStyle, { opacity: pressed ? 0.9 : 1 }]}
     >
-      <LinearGradient
-        colors={gradients.fab}
-        style={[styles.round, shadows.md]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      >
-        <Icon size={26} color={colors.textInverse} strokeWidth={2} />
-      </LinearGradient>
+      {extended ? (
+        <View style={[styles.extended, shadows.lg]}>
+          <Icon size={24} color={colors.textInverse} strokeWidth={2.2} />
+          <Text variant="bodyLargeBold" color="textInverse">
+            {extended.label}
+          </Text>
+        </View>
+      ) : (
+        <View style={[styles.round, shadows.lg]}>
+          <Icon size={30} color={colors.textInverse} strokeWidth={2.4} />
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -81,21 +70,24 @@ const styles = StyleSheet.create({
     zIndex: 20,
   },
   round: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: colors.primary,
+    borderWidth: 4,
+    borderColor: colors.surfaceMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
   extended: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 56,
-    paddingHorizontal: spacing.lg,
+    height: 60,
+    paddingHorizontal: spacing.xl,
     borderRadius: radius.full,
+    backgroundColor: colors.primary,
+    borderWidth: 4,
+    borderColor: colors.surfaceMuted,
     gap: spacing.sm,
-  },
-  extLabel: {
-    marginLeft: spacing.xs,
   },
 });

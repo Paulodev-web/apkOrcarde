@@ -2,6 +2,7 @@ import type { LucideIcon } from 'lucide-react-native';
 import { StyleSheet, View } from 'react-native';
 
 import { Button } from '@/design-system/primitives/Button';
+import { radius } from '@/design-system/tokens/radius';
 import { Text } from '@/design-system/primitives/Text';
 import { colors } from '@/design-system/tokens/colors';
 import { spacing } from '@/design-system/tokens/spacing';
@@ -16,7 +17,9 @@ type Props = {
 export function EmptyState({ icon: Icon, title, description, cta }: Props) {
   return (
     <View style={styles.root}>
-      <Icon size={64} color={colors.textMuted} strokeWidth={2} />
+      <View style={styles.iconBox}>
+        <Icon size={30} color={colors.textMuted} strokeWidth={1.8} />
+      </View>
       <Text variant="heading3" color="textPrimary" style={styles.title}>
         {title}
       </Text>
@@ -26,7 +29,7 @@ export function EmptyState({ icon: Icon, title, description, cta }: Props) {
         </Text>
       ) : null}
       {cta ? (
-        <Button variant="primary" onPress={cta.onPress} style={styles.cta}>
+        <Button variant="secondary" block onPress={cta.onPress} style={styles.cta}>
           {cta.label}
         </Button>
       ) : null}
@@ -40,6 +43,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.xxxl,
+  },
+  iconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceSunken,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   title: {
     marginTop: spacing.lg,

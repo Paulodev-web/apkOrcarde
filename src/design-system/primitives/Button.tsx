@@ -7,9 +7,8 @@ import {
   View,
   type ViewStyle,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
 
-import { colors, gradients } from '@/design-system/tokens/colors';
+import { colors } from '@/design-system/tokens/colors';
 import { radius } from '@/design-system/tokens/radius';
 import { spacing } from '@/design-system/tokens/spacing';
 
@@ -27,12 +26,23 @@ type Props = {
   onPress: () => void;
   children: string;
   style?: StyleProp<ViewStyle>;
+  /** Ocupa a largura toda. Padrao das acoes de campo. */
+  block?: boolean;
   /** When variant is ghost, render label in danger color */
   ghostDanger?: boolean;
 };
 
-const HEIGHT: Record<ButtonSize, number> = { sm: 36, md: 44, lg: 56 };
+// Piso de 48 px vale para todo tamanho: e o alvo minimo com luva.
+const HEIGHT: Record<ButtonSize, number> = { sm: 48, md: 52, lg: 56 };
 
+/**
+ * Uma acao primaria por tela. Duas lado a lado significa que uma delas devia
+ * ser `secondary`.
+ *
+ * Sem degrade: o preenchimento primario e accent-600 chapado (branco por cima
+ * da 4.88:1). Degrade em botao e o que mais envelhece uma interface, e o
+ * sistema do web ja proibe — a profundidade aqui vem de borda e sombra.
+ */
 export function Button({
   variant = 'primary',
   size = 'md',
@@ -42,108 +52,59 @@ export function Button({
   onPress,
   children,
   style,
+  block = false,
   ghostDanger = false,
 }: Props) {
-  const h = Math.max(HEIGHT[size], 48);
+  const h = HEIGHT[size];
   const isDisabled = disabled || loading;
+  const onFill = variant === 'primary' || variant === 'danger';
 
-  const content = (
-    <View style={styles.row}>
-      {loading ? (
-        <ActivityIndicator color={variant === 'primary' ? colors.textInverse : colors.primary} />
-      ) : Icon ? (
-        <Icon
-          size={20}
-          color={
-            variant === 'primary' || variant === 'danger'
-              ? colors.textInverse
-              : colors.primary
-          }
-          strokeWidth={2}
-        />
-      ) : null}
-      <Text
-        variant={size === 'sm' ? 'bodyBold' : 'bodyBold'}
-        color={variant === 'primary' || variant === 'danger' ? 'textInverse' : 'primary'}
-      >
-        {children}
-      </Text>
-    </View>
-  );
-
-  if (variant === 'primary') {
-    return (
-      <Pressable
-        accessibilityRole="button"
-        disabled={isDisabled}
-        onPress={onPress}
-        style={({ pressed }) => [
-          styles.pressable,
-          { minHeight: h, opacity: isDisabled ? 0.4 : pressed ? 0.85 : 1 },
-          style,
-        ]}
-      >
-        <LinearGradient
-          colors={[...gradients.brand]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.gradientFill, { minHeight: h }]}
-        >
-          {content}
-        </LinearGradient>
-      </Pressable>
-    );
-  }
-
-  const ghostLabelColor = ghostDanger && variant === 'ghost' ? 'danger' : 'primary';
-  const nonPrimaryIconColor =
-    variant === 'ghost' && ghostDanger ? colors.danger : colors.primary;
-  const bg =
-    variant === 'danger'
+  const labelColor = onFill
+    ? 'textInverse'
+    : variant === 'ghost' && ghostDanger
+      ? 'danger'
+      : 'primary';
+  const inkColor = onFill
+    ? colors.textInverse
+    : variant === 'ghost' && ghostDanger
       ? colors.danger
-      : variant === 'secondary'
-        ? colors.surface
-        : 'transparent';
-  const borderWidth = variant === 'secondary' ? 1 : 0;
-  const borderColor = variant === 'secondary' ? colors.primary : 'transparent';
+      : colors.primary;
+
+  const bg =
+    variant === 'primary'
+      ? colors.primary
+      : variant === 'danger'
+        ? colors.danger
+        : variant === 'secondary'
+          ? colors.surface
+          : 'transparent';
 
   return (
     <Pressable
       accessibilityRole="button"
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
       disabled={isDisabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.pressable,
+        block ? styles.block : styles.hug,
         {
           minHeight: h,
           backgroundColor: bg,
-          borderWidth,
-          borderColor,
-          borderRadius: radius.md,
-          opacity: isDisabled ? 0.4 : pressed ? 0.85 : 1,
+          borderWidth: variant === 'secondary' ? 1 : 0,
+          borderColor: variant === 'secondary' ? colors.borderStrong : 'transparent',
+          opacity: isDisabled ? 0.4 : pressed ? 0.88 : 1,
         },
         style,
       ]}
     >
-      <View style={[styles.rowCenter, { minHeight: h, paddingHorizontal: spacing.lg }]}>
+      <View style={[styles.row, { minHeight: h }]}>
         {loading ? (
-          <ActivityIndicator
-            color={variant === 'danger' ? colors.textInverse : nonPrimaryIconColor}
-          />
+          <ActivityIndicator color={inkColor} />
         ) : Icon ? (
-          <Icon size={20} color={variant === 'danger' ? colors.textInverse : nonPrimaryIconColor} strokeWidth={2} />
+          <Icon size={20} color={inkColor} strokeWidth={2.1} />
         ) : null}
-        <Text
-          variant="bodyBold"
-          color={
-            variant === 'danger'
-              ? 'textInverse'
-              : ghostLabelColor === 'danger'
-                ? 'danger'
-                : 'primary'
-          }
-          style={Icon || loading ? { marginLeft: spacing.sm } : undefined}
-        >
+        <Text variant="bodyLargeBold" color={labelColor}>
           {children}
         </Text>
       </View>
@@ -153,27 +114,16 @@ export function Button({
 
 const styles = StyleSheet.create({
   pressable: {
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     overflow: 'hidden',
-    alignSelf: 'flex-start',
   },
-  gradientFill: {
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
+  hug: { alignSelf: 'flex-start' },
+  block: { alignSelf: 'stretch' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.sm,
-    minHeight: 48,
-    paddingHorizontal: spacing.lg,
-  },
-  rowCenter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: spacing.xl,
   },
 });

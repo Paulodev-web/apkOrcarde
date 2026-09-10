@@ -1,4 +1,4 @@
-export { colors, gradients } from './colors';
+export { colors, gradients, neutral, accent, green, teal, amber, orange, red } from './colors';
 export type { ColorKey } from './colors';
 export { spacing } from './spacing';
 export type { SpacingKey } from './spacing';

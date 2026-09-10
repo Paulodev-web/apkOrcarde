@@ -15,9 +15,9 @@ export function SyncStatusIcon({ status }: Props) {
   if (status === 'uploading_media') {
     return (
       <View style={styles.box}>
-        <Upload size={22} color={colors.info} strokeWidth={2} />
+        <Upload size={22} color={colors.primary} strokeWidth={2} />
         <View style={styles.overlay}>
-          <ActivityIndicator size="small" color={colors.info} />
+          <ActivityIndicator size="small" color={colors.primary} />
         </View>
       </View>
     );
@@ -25,17 +25,17 @@ export function SyncStatusIcon({ status }: Props) {
   if (status === 'calling_rpc') {
     return (
       <View style={styles.box}>
-        <Loader2 size={22} color={colors.info} strokeWidth={2} />
+        <Loader2 size={22} color={colors.primary} strokeWidth={2} />
         <View style={styles.overlay}>
-          <ActivityIndicator size="small" color={colors.info} />
+          <ActivityIndicator size="small" color={colors.primary} />
         </View>
       </View>
     );
   }
   if (status === 'synced') {
-    return <Check size={22} color={colors.success} strokeWidth={2} />;
+    return <Check size={22} color={colors.successText} strokeWidth={2} />;
   }
-  return <X size={22} color={colors.danger} strokeWidth={2} />;
+  return <X size={22} color={colors.dangerText} strokeWidth={2} />;
 }
 
 const styles = StyleSheet.create({
