@@ -39,6 +39,9 @@ coverage/
 .env
 .env.local
 .env.*.local
+# Qualquer copia de ambiente (.env.prod-bak e afins): elas carregam chave real.
+.env.*
+!.env.example
 
 # Editor
 .vscode/

@@ -1,3 +1,4 @@
+import { File } from 'expo-file-system';
 import * as ImageManipulator from 'expo-image-manipulator';
 
 import { MEDIA_LIMITS } from '@/constants/limits';
@@ -58,10 +59,11 @@ export async function compressImage(uri: string): Promise<CompressResult> {
 }
 
 async function getFileSize(uri: string): Promise<number> {
+  // Mesmo motivo do upload: `fetch` nao le `file://` aqui, e devolvia 0 em
+  // todo tamanho de arquivo.
   try {
-    const response = await fetch(uri);
-    const blob = await response.blob();
-    return blob.size;
+    const f = new File(uri);
+    return f.exists ? f.size : 0;
   } catch {
     return 0;
   }

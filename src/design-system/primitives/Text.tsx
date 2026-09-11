@@ -30,7 +30,7 @@ export function Text({
           fontSize: t.fontSize,
           fontWeight: t.fontWeight,
           lineHeight: t.lineHeight,
-          ...(variant === 'label' && 'letterSpacing' in t ? { letterSpacing: t.letterSpacing } : {}),
+          ...('letterSpacing' in t ? { letterSpacing: t.letterSpacing } : {}),
           color: colors[color],
         },
         style,

@@ -1,25 +1,22 @@
-import { DrawerActions, useNavigation } from '@react-navigation/native';
+'use client';
+
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Bell, HardHat, Menu } from 'lucide-react-native';
+import { ChevronRight, Clock, HardHat, RefreshCw, WifiOff } from 'lucide-react-native';
 import { FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { ListItemCard } from '@/design-system/composed/ListItemCard';
-import { MarcosTimeline } from '@/design-system/composed/MarcosTimeline';
-import { StatusBadge } from '@/design-system/composed/StatusBadge';
 import { EmptyState } from '@/design-system/composed/EmptyState';
 import { ErrorState } from '@/design-system/composed/ErrorState';
 import { LoadingState } from '@/design-system/composed/LoadingState';
 import { Text } from '@/design-system/primitives/Text';
-import { Card } from '@/design-system/primitives/Card';
-import { ScreenContainer } from '@/design-system/layouts/ScreenContainer';
-import { ScreenHeader } from '@/design-system/layouts/ScreenHeader';
 import { colors } from '@/design-system/tokens/colors';
+import { radius } from '@/design-system/tokens/radius';
+import { shadows } from '@/design-system/tokens/shadows';
 import { spacing } from '@/design-system/tokens/spacing';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useOutboxCount } from '@/hooks/useOutboxCount';
 import { supabase } from '@/lib/supabase/client';
-import { useNotificationStore } from '@/stores/notification.store';
 import { useSessionStore } from '@/stores/session.store';
 import type { WorkListItem, WorkStatus } from '@/types';
 import { relativeTimePtBr } from '@/utils/relativeTime';
@@ -48,155 +45,125 @@ async function fetchWorks(): Promise<WorkListItem[]> {
   return (data ?? []) as WorkListItem[];
 }
 
-function accentForStatus(status: WorkStatus): string {
-  const map: Record<WorkStatus, string> = {
-    planned: colors.neutral,
-    in_progress: colors.info,
-    paused: colors.warning,
-    completed: colors.success,
-    cancelled: colors.danger,
-  };
-  return map[status];
-}
+const STATUS_LABEL: Record<WorkStatus, { label: string; fg: string; bg: string }> = {
+  planned: { label: 'Planejada', fg: colors.textSecondary, bg: colors.neutralBg },
+  in_progress: { label: 'Em obra', fg: colors.progressText, bg: colors.progressBg },
+  paused: { label: 'Pausada', fg: colors.warningText, bg: colors.warningBg },
+  completed: { label: 'Concluída', fg: colors.successText, bg: colors.successBg },
+  cancelled: { label: 'Cancelada', fg: colors.dangerText, bg: colors.dangerBg },
+};
 
+const MILESTONE_TINT: Record<string, string> = {
+  approved: colors.success,
+  awaiting_approval: colors.warning,
+  in_progress: colors.primaryAccent,
+  rejected: colors.danger,
+  pending: colors.border,
+};
+
+/**
+ * Tela inicial: a lista de obras.
+ *
+ * Cada cartao responde tres perguntas na ordem em que o gerente pergunta:
+ * que obra e esta, em que marco ela esta, e o que ela tem pendente. O resto
+ * (endereco, datas) fica na tela da obra — em cartao, cada linha a mais
+ * atrasa a leitura no sol.
+ */
 export default function WorksListScreen() {
   const router = useRouter();
-  const navigation = useNavigation();
+  const insets = useSafeAreaInsets();
   const { isOnline } = useNetworkStatus();
   const { pendingCount } = useOutboxCount();
   const userName = useSessionStore((s) => s.user?.fullName ?? '');
-  const unreadCount = useNotificationStore((s) => s.unreadCount);
 
-  const query = useQuery({
-    queryKey: WORKS_QUERY_KEY,
-    queryFn: fetchWorks,
-  });
+  const query = useQuery({ queryKey: WORKS_QUERY_KEY, queryFn: fetchWorks });
 
-  const inProgressCount = (query.data ?? []).filter((w) => w.status === 'in_progress').length;
-
-  const listHeader = (
-    <>
-      <ScreenHeader
-        title="Obras"
-        leftAction={{
-          icon: Menu,
-          onPress: () => navigation.dispatch(DrawerActions.openDrawer()),
-          accessibilityLabel: 'Abrir menu',
-        }}
-        rightActions={[
-          {
-            icon: Bell,
-            onPress: () => router.push('/(main)/notificacoes' as never),
-            badge: unreadCount,
-            accessibilityLabel:
-              unreadCount > 0
-                ? `${unreadCount} notificacoes nao lidas`
-                : 'Notificacoes',
-          },
-        ]}
-      />
-
-      {!isOnline ? (
-        <Card padding="md" style={styles.bannerWarn}>
-          <Text variant="bodyBold" color="warning">
-            Sem conexao. Acoes serao enviadas quando voltar a internet.
+  const header = (
+    <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
+      <View style={styles.headerRow}>
+        <View style={styles.titles}>
+          <Text variant="display">Obras</Text>
+          {userName ? (
+            <Text variant="body" color="textSecondary">
+              {userName}
+            </Text>
+          ) : null}
+        </View>
+        <View style={styles.avatar}>
+          <Text variant="bodyLargeBold" style={{ color: colors.accentDark }}>
+            {initials(userName)}
           </Text>
-        </Card>
-      ) : null}
+        </View>
+      </View>
 
-      {pendingCount > 0 ? (
+      {/* Conectividade e fila sao estado permanente do app no canteiro, nao erro. */}
+      {!isOnline ? (
+        <View style={[styles.strip, styles.stripWarn]}>
+          <WifiOff size={20} color={colors.warning} strokeWidth={1.9} />
+          <Text variant="body" style={styles.stripText}>
+            <Text variant="bodyBold" style={{ color: colors.warningText }}>Sem conexão</Text>
+            <Text variant="body" style={{ color: colors.warningText }}> · nada se perde</Text>
+          </Text>
+        </View>
+      ) : pendingCount > 0 ? (
         <Pressable
-          onPress={() => router.push('/(main)/fila' as never)}
           accessibilityRole="button"
           accessibilityLabel="Ver fila de envio"
-          style={styles.bannerPress}
+          onPress={() => router.push('/(main)/fila' as never)}
+          style={({ pressed }) => [styles.strip, styles.stripWarn, { opacity: pressed ? 0.75 : 1 }]}
         >
-          <Card padding="md" style={styles.bannerInfo}>
-            <Text variant="bodyBold" color="info">
-              {pendingCount === 1
-                ? '1 acao pendente de envio'
-                : `${pendingCount} acoes pendentes de envio`}
+          <RefreshCw size={20} color={colors.warning} strokeWidth={1.9} />
+          <Text variant="body" style={styles.stripText}>
+            <Text variant="bodyBold" style={{ color: colors.warningText }}>
+              {pendingCount === 1 ? '1 registro na fila' : `${pendingCount} registros na fila`}
             </Text>
-          </Card>
+            <Text variant="body" style={{ color: colors.warningText }}> · enviando</Text>
+          </Text>
+          <ChevronRight size={18} color={colors.warning} strokeWidth={2} />
         </Pressable>
       ) : null}
-
-      {userName ? (
-        <View style={styles.greeting}>
-          <Text variant="heading2" color="textPrimary">
-            Olá, {userName.split(' ')[0]}
-          </Text>
-          <Text variant="body" color="textSecondary" style={styles.greetingSub}>
-            {inProgressCount === 1
-              ? '1 obra em andamento'
-              : `${inProgressCount} obras em andamento`}
-          </Text>
-        </View>
-      ) : null}
-    </>
+    </View>
   );
 
-  return (
-    <ScreenContainer scrollable={false} noPadding background="muted">
-      {query.isLoading ? (
+  if (query.isLoading) {
+    return (
+      <View style={styles.root}>
+        {header}
         <LoadingState label="Carregando obras..." />
-      ) : query.isError ? (
-        <View style={styles.padded}>
-          {listHeader}
-          <ErrorState
-            title="Erro ao carregar obras"
-            description="Verifique sua conexao e tente novamente."
-            onRetry={() => void query.refetch()}
-          />
-        </View>
-      ) : (query.data ?? []).length === 0 ? (
-        <View style={styles.padded}>
-          {listHeader}
-          <EmptyState
-            icon={HardHat}
-            title="Nenhuma obra alocada"
-            description="Voce ainda nao esta alocado em nenhuma obra. Fale com seu engenheiro."
-            cta={{ label: 'Verificar de novo', onPress: () => void query.refetch() }}
-          />
-        </View>
+      </View>
+    );
+  }
+
+  if (query.isError) {
+    return (
+      <View style={styles.root}>
+        {header}
+        <ErrorState
+          title="Erro ao carregar obras"
+          description="Verifique sua conexão e tente novamente."
+          onRetry={() => void query.refetch()}
+        />
+      </View>
+    );
+  }
+
+  const works = query.data ?? [];
+
+  return (
+    <View style={styles.root}>
+      {header}
+      {works.length === 0 ? (
+        <EmptyState
+          icon={HardHat}
+          title="Nenhuma obra alocada"
+          description="Você ainda não está alocado em nenhuma obra. Fale com seu engenheiro."
+          cta={{ label: 'Verificar de novo', onPress: () => void query.refetch() }}
+        />
       ) : (
         <FlatList
-          data={query.data ?? []}
+          data={works}
           keyExtractor={(item) => item.id}
-          ListHeaderComponent={<View style={styles.listHeader}>{listHeader}</View>}
-          contentContainerStyle={styles.listContent}
-          renderItem={({ item }) => {
-            const planned = countEmbed(item.planned_posts);
-            const poles = countEmbed(item.pole_installations);
-            const metaLine =
-              planned > 0
-                ? `Postes ${poles} / ${planned} · Atualizado ${relativeTimePtBr(item.last_activity_at)}`
-                : `Postes ${poles} · Atualizado ${relativeTimePtBr(item.last_activity_at)}`;
-
-            return (
-              <ListItemCard
-                title={item.name}
-                subtitle={item.client_name}
-                description={item.address ?? undefined}
-                leftAccent={{ color: accentForStatus(item.status) }}
-                badges={<StatusBadge kind="work" status={item.status} />}
-                metadata={
-                  <View>
-                    <MarcosTimeline
-                      variant="compact"
-                      milestones={item.work_milestones ?? []}
-                    />
-                    <Text variant="caption" color="textMuted" style={styles.metaLine}>
-                      {metaLine}
-                    </Text>
-                  </View>
-                }
-                onPress={() =>
-                  router.push({ pathname: '/(main)/obra/[workId]', params: { workId: item.id } })
-                }
-              />
-            );
-          }}
+          contentContainerStyle={styles.list}
           refreshControl={
             <RefreshControl
               refreshing={query.isRefetching && !query.isLoading}
@@ -205,44 +172,136 @@ export default function WorksListScreen() {
               colors={[colors.primary]}
             />
           }
+          renderItem={({ item }) => <WorkCard item={item} onPress={() => router.push({ pathname: '/(main)/obra/[workId]', params: { workId: item.id } })} />}
         />
       )}
-    </ScreenContainer>
+    </View>
   );
 }
 
+function WorkCard({ item, onPress }: { item: WorkListItem; onPress: () => void }) {
+  const status = STATUS_LABEL[item.status];
+  const milestones = [...(item.work_milestones ?? [])].sort((a, b) => a.order_index - b.order_index);
+  const current = milestones.find((m) => m.status !== 'approved');
+  const currentIndex = current ? milestones.indexOf(current) + 1 : milestones.length;
+
+  const planned = countEmbed(item.planned_posts);
+  const poles = countEmbed(item.pole_installations);
+
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.card, shadows.sm, { opacity: pressed ? 0.85 : 1 }]}
+    >
+      <View style={styles.cardHead}>
+        <View style={styles.cardTitleRow}>
+          <Text variant="heading3" style={styles.cardTitle} numberOfLines={2}>
+            {item.name}
+          </Text>
+          <View style={[styles.pill, { backgroundColor: status.bg }]}>
+            <Text variant="captionBold" style={{ color: status.fg }}>{status.label}</Text>
+          </View>
+        </View>
+        {item.client_name ? (
+          <Text variant="body" color="textSecondary" numberOfLines={1}>
+            {item.client_name}
+          </Text>
+        ) : null}
+      </View>
+
+      {milestones.length > 0 ? (
+        <View style={styles.rail}>
+          <View style={styles.railBars}>
+            {milestones.map((m) => (
+              <View
+                key={m.id}
+                style={[styles.railBar, { backgroundColor: MILESTONE_TINT[m.status] ?? colors.border }]}
+              />
+            ))}
+          </View>
+          <Text variant="caption" color="textSecondary">
+            {current ? `Marco ${currentIndex} de ${milestones.length} · ` : 'Todos os marcos aprovados'}
+            {current ? <Text variant="captionBold" color="textPrimary">{current.name}</Text> : null}
+          </Text>
+        </View>
+      ) : null}
+
+      <View style={styles.divider} />
+
+      <View style={styles.metaRow}>
+        <View style={styles.meta}>
+          <Text variant="captionBold" color="textSecondary">
+            {planned > 0 ? `${poles} de ${planned} postes` : `${poles} postes`}
+          </Text>
+        </View>
+        <View style={styles.meta}>
+          <Clock size={17} color={colors.textMuted} strokeWidth={1.8} />
+          <Text variant="caption" color="textSecondary">{relativeTimePtBr(item.last_activity_at)}</Text>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '—';
+  const first = parts[0]?.[0] ?? '';
+  const last = parts.length > 1 ? (parts[parts.length - 1]?.[0] ?? '') : '';
+  return (first + last).toUpperCase();
+}
+
 const styles = StyleSheet.create({
-  padded: {
-    flex: 1,
-    paddingHorizontal: spacing.lg,
-  },
-  listHeader: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-  },
-  listContent: {
-    paddingBottom: spacing.huge,
-  },
-  bannerWarn: {
-    marginBottom: spacing.sm,
-    backgroundColor: colors.warningBg,
-    borderColor: colors.warning,
-  },
-  bannerInfo: {
-    marginBottom: spacing.sm,
+  root: { flex: 1, backgroundColor: colors.surfaceMuted },
+
+  header: { paddingHorizontal: spacing.xl, paddingBottom: spacing.lg, gap: spacing.lg },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  titles: { flex: 1, gap: 2 },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 999,
     backgroundColor: colors.infoBg,
-    borderColor: colors.info,
+    borderWidth: 1,
+    borderColor: colors.borderAccent,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  bannerPress: {
-    marginBottom: spacing.sm,
+
+  strip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    minHeight: 48,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
   },
-  greeting: {
-    marginBottom: spacing.md,
+  stripWarn: { backgroundColor: colors.warningBg, borderWidth: 1, borderColor: colors.warningBorder },
+  stripText: { flex: 1 },
+
+  list: { paddingHorizontal: spacing.xl, paddingTop: spacing.xs, paddingBottom: spacing.huge, gap: spacing.lg },
+
+  card: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
+    gap: spacing.lg,
   },
-  greetingSub: {
-    marginTop: spacing.xs,
-  },
-  metaLine: {
-    marginTop: spacing.xs,
-  },
+  cardHead: { gap: 6 },
+  cardTitleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
+  cardTitle: { flex: 1 },
+  pill: { paddingHorizontal: spacing.md, paddingVertical: 4, borderRadius: radius.full },
+
+  rail: { gap: spacing.sm },
+  railBars: { flexDirection: 'row', gap: 6 },
+  railBar: { flex: 1, height: 6, borderRadius: 999 },
+
+  divider: { height: 1, backgroundColor: colors.border },
+
+  metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.lg },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 7 },
 });

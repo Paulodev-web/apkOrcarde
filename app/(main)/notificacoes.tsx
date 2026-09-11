@@ -1,4 +1,3 @@
-import { DrawerActions, useNavigation } from '@react-navigation/native';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import type { LucideIcon } from 'lucide-react-native';
@@ -106,7 +105,6 @@ const SECTION_ORDER = ['Hoje', 'Ontem', 'Esta semana', 'Mais antigas'] as const;
 
 export default function NotificacoesScreen() {
   const router = useRouter();
-  const navigation = useNavigation();
   const queryClient = useQueryClient();
   const userId = useSessionStore((s) => s.user?.id ?? '');
   const setUnreadCount = useNotificationStore((s) => s.setUnreadCount);
@@ -212,11 +210,6 @@ export default function NotificacoesScreen() {
     <ScreenContainer scrollable={false} noPadding background="muted">
       <ScreenHeader
         title="Notificações"
-        leftAction={{
-          icon: Menu,
-          onPress: () => navigation.dispatch(DrawerActions.openDrawer()),
-          accessibilityLabel: 'Abrir menu',
-        }}
         rightSlot={markAllSlot}
       />
       <View style={styles.body}>

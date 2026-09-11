@@ -68,7 +68,7 @@ export default function LoginScreen() {
             <Text variant="heading1" color="textInverse" style={styles.heroTitle}>
               OrçaRede
             </Text>
-            <Text variant="bodyLarge" color="textInverse" style={styles.heroSubtitle}>
+            <Text variant="bodyLarge" style={styles.heroSubtitle}>
               Gestão de redes elétricas
             </Text>
           </LinearGradient>
@@ -113,17 +113,17 @@ export default function LoginScreen() {
           />
           <View style={styles.gapXl} />
           {globalError ? (
-            <Text variant="caption" color="danger" style={styles.err}>
+            <Text variant="body" color="dangerText" style={styles.err}>
               {globalError}
             </Text>
           ) : null}
           <Button
             variant="primary"
             size="lg"
+            block
             loading={submitting}
             disabled={submitting}
             onPress={handleSubmit(onSubmit)}
-            style={styles.fullBtn}
           >
             Entrar
           </Button>
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   hero: {
-    flex: 1,
+    flex: 4,
   },
   heroGradient: {
     flex: 1,
@@ -151,8 +151,8 @@ const styles = StyleSheet.create({
     padding: spacing.xxl,
   },
   logo: {
-    width: 120,
-    height: 120,
+    width: 104,
+    height: 104,
   },
   heroTitle: {
     marginTop: spacing.lg,
@@ -160,13 +160,14 @@ const styles = StyleSheet.create({
   },
   heroSubtitle: {
     marginTop: spacing.sm,
-    opacity: 0.85,
     textAlign: 'center',
+    color: colors.onDark,
   },
   form: {
-    flex: 1,
-    padding: spacing.xxl,
-    justifyContent: 'flex-start',
+    flex: 5,
+    paddingHorizontal: spacing.xxl,
+    paddingTop: spacing.xxxl,
+    backgroundColor: colors.surface,
   },
   gapMd: {
     height: spacing.md,
@@ -176,8 +177,5 @@ const styles = StyleSheet.create({
   },
   err: {
     marginBottom: spacing.sm,
-  },
-  fullBtn: {
-    alignSelf: 'stretch',
   },
 });

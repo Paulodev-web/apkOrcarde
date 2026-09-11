@@ -1,6 +1,6 @@
-import { DrawerActions, useNavigation } from '@react-navigation/native';
 import Constants from 'expo-constants';
-import { Menu } from 'lucide-react-native';
+import { useRouter } from 'expo-router';
+import { ChevronLeft } from 'lucide-react-native';
 import { Image, Linking, ScrollView, StyleSheet, View } from 'react-native';
 
 import { Button } from '@/design-system/primitives/Button';
@@ -10,7 +10,7 @@ import { ScreenHeader } from '@/design-system/layouts/ScreenHeader';
 import { spacing } from '@/design-system/tokens/spacing';
 
 export default function SobreScreen() {
-  const navigation = useNavigation();
+  const router = useRouter();
   const version = Constants.expoConfig?.version ?? '1.0.0';
 
   return (
@@ -18,9 +18,9 @@ export default function SobreScreen() {
       <ScreenHeader
         title="Sobre"
         leftAction={{
-          icon: Menu,
-          onPress: () => navigation.dispatch(DrawerActions.openDrawer()),
-          accessibilityLabel: 'Abrir menu',
+          icon: ChevronLeft,
+          onPress: () => router.back(),
+          accessibilityLabel: 'Voltar',
         }}
       />
       <ScrollView contentContainerStyle={styles.scroll}>

@@ -23,7 +23,16 @@ export async function callRpc<T>(
   name: string,
   input: RpcInput,
 ): Promise<ActionResult<T>> {
-  const { data, error } = await supabase.rpc(name, { input: JSON.stringify(input) });
+  // O payload vai como OBJETO, nao como string.
+  //
+  // Com `JSON.stringify(input)` o PostgREST entrega ao Postgres um jsonb do
+  // tipo `string` — e ai `input->>'work_id'` devolve NULL, porque nao existe
+  // chave nenhuma dentro de uma string. Toda RPC entao morria em
+  // "work_id e obrigatorio" ou "Cannot coerce the result to a single JSON
+  // object". Era isto que impedia qualquer registro de campo de chegar ao
+  // banco. Passando o objeto, o supabase-js serializa o corpo inteiro e o
+  // parametro chega como jsonb `object`, que e o que as funcoes esperam.
+  const { data, error } = await supabase.rpc(name, { input });
 
   if (error) {
     if (error.code === '23505') {

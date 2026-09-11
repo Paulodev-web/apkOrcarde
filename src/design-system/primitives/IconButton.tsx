@@ -30,7 +30,7 @@ export function IconButton({
       ? colors.primary
       : variant === 'ghost'
         ? 'transparent'
-        : colors.surfaceMuted;
+        : colors.surfaceSunken;
   const iconColor =
     variant === 'primary' ? colors.textInverse : colors.primary;
 
@@ -39,6 +39,9 @@ export function IconButton({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
+      // O alvo desenhado ja tem 48 px, mas no canteiro o dedo vem de luva e
+      // com o celular tremendo. A folga custa nada e evita o toque perdido.
+      hitSlop={8}
       style={({ pressed }) => [
         styles.wrap,
         {

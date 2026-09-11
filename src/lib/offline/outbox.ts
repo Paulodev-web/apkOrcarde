@@ -1,4 +1,5 @@
 import { OUTBOX_DEFAULTS } from '@/constants/limits';
+import { discardPendingMedia } from '@/lib/media/pending-store';
 import type { EnqueueOutboxInput, OutboxItem, OutboxStatus } from '@/types';
 
 import { getDb } from './db';
@@ -91,11 +92,31 @@ export async function markSynced(id: number): Promise<void> {
   const db = await getDb();
   const now = new Date().toISOString();
 
+  // A foto ja subiu; guardar a copia local so ocuparia espaco no aparelho.
+  await limparMidiaLocal(db, id);
+
   await db.runAsync(
     `UPDATE outbox SET status = 'synced', synced_at = ?, last_error = NULL, status_updated_at = ? WHERE id = ?`,
     [now, now, id],
   );
   outboxEmitter.emit();
+}
+
+/** Apaga do disco a midia guardada para um item da fila. */
+async function limparMidiaLocal(
+  db: Awaited<ReturnType<typeof getDb>>,
+  id: number,
+): Promise<void> {
+  try {
+    const row = await db.getFirstAsync<{ media_paths: string | null }>(
+      `SELECT media_paths FROM outbox WHERE id = ?`,
+      [id],
+    );
+    if (!row?.media_paths) return;
+    discardPendingMedia(JSON.parse(row.media_paths) as string[]);
+  } catch {
+    // Falhar em apagar arquivo nao pode derrubar a sincronizacao.
+  }
 }
 
 export async function markFailed(id: number, error: string): Promise<void> {
@@ -231,6 +252,8 @@ export async function retryFailedItem(id: number): Promise<void> {
 
 export async function discardItem(id: number): Promise<void> {
   const db = await getDb();
+  // Descartar o registro descarta a foto junto: ninguem mais vai busca-la.
+  await limparMidiaLocal(db, id);
   await db.runAsync(`DELETE FROM outbox WHERE id = ?`, [id]);
   outboxEmitter.emit();
 }

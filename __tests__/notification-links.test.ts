@@ -11,18 +11,18 @@ describe('resolveDeepLink', () => {
     );
   });
 
-  it('normalizes diario detail path', () => {
-    expect(resolveDeepLink('/obra/w1/diario/d1')).toBe('/(main)/obra/w1/diario/d1');
-  });
-
   it('normalizes marcos path', () => {
     expect(resolveDeepLink('/obra/w1/marcos')).toBe('/(main)/obra/w1/marcos');
   });
 
-  it('normalizes checklists detail path', () => {
-    expect(resolveDeepLink('/obra/w1/checklists/c1')).toBe(
-      '/(main)/obra/w1/checklists/c1',
-    );
+  // Diario e checklist sairam da navegacao, mas o banco ainda tem gatilhos que
+  // geram notificacao apontando para eles. Cair na home e o comportamento
+  // correto: melhor do que abrir uma tela que o produto nao tem mais.
+  it('devolve null para as rotas que dormiram', () => {
+    expect(resolveDeepLink('/obra/w1/diario/d1')).toBeNull();
+    expect(resolveDeepLink('/obra/w1/diario')).toBeNull();
+    expect(resolveDeepLink('/obra/w1/checklists/c1')).toBeNull();
+    expect(resolveDeepLink('/obra/w1/checklists')).toBeNull();
   });
 
   it('normalizes alertas detail path', () => {

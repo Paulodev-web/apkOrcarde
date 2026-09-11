@@ -1,8 +1,8 @@
 'use client';
 
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { Camera, ChevronLeft, ImagePlus, SendHorizontal } from 'lucide-react-native';
+import { Stack, useLocalSearchParams } from 'expo-router';
+import { Camera, ImagePlus, SendHorizontal } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -18,7 +18,8 @@ import {
 import { SyncStatusIcon } from '@/design-system/composed/SyncStatusIcon';
 import { IconButton } from '@/design-system/primitives/IconButton';
 import { Text } from '@/design-system/primitives/Text';
-import { ScreenHeader } from '@/design-system/layouts/ScreenHeader';
+import { ChatAudioPlayer, ChatVideoPlayer } from '@/components/obra/ChatMediaPlayer';
+import { ObraHeader } from '@/components/obra/ObraHeader';
 import { colors } from '@/design-system/tokens/colors';
 import { radius } from '@/design-system/tokens/radius';
 import { spacing } from '@/design-system/tokens/spacing';
@@ -78,7 +79,6 @@ async function fetchMessages(workId: string, cursor?: string) {
 
 export default function ChatScreen() {
   const params = useLocalSearchParams<{ workId: string }>();
-  const router = useRouter();
   const workId = typeof params.workId === 'string' ? params.workId : '';
   const userId = useSessionStore((s) => s.user?.id ?? '');
   const isOnline = useConnectivityStore((s) => s.isOnline);
@@ -262,20 +262,13 @@ export default function ChatScreen() {
 
   return (
     <View style={styles.root}>
-      <Stack.Screen options={{ headerShown: false, title: 'Chat' }} />
-      <ScreenHeader
-        title="Chat"
-        leftAction={{
-          icon: ChevronLeft,
-          onPress: () => router.back(),
-          accessibilityLabel: 'Voltar',
-        }}
-      />
+      <Stack.Screen options={{ headerShown: false, title: 'Conversa' }} />
+      <ObraHeader title="Conversa" subtitle="engenheiro responsável" />
 
       {!isOnline ? (
         <View style={styles.offlineBanner}>
-          <Text variant="body" color="warning" style={styles.offlineText}>
-            Sem conexao — mensagens serao enviadas quando voltar
+          <Text variant="body" color="warningText" style={styles.offlineText}>
+            Sem conexão — mensagens serão enviadas quando voltar
           </Text>
         </View>
       ) : null}
@@ -458,13 +451,13 @@ function AttachmentsList({ attachments }: { attachments: WorkMessage['work_messa
 function AttachmentItem({ attachment }: { attachment: WorkMessage['work_message_attachments'][0] }) {
   const [url, setUrl] = useState<string | null>(null);
 
+  // Áudio e vídeo também precisam de URL assinada. Antes só a imagem pedia, e
+  // por isso o áudio nunca teve como tocar.
   useEffect(() => {
-    if (attachment.file_type === 'image') {
-      void getSignedUrl(attachment.storage_path, SIGNED_URL_TTL_SECONDS)
-        .then(setUrl)
-        .catch(() => setUrl(null));
-    }
-  }, [attachment.storage_path, attachment.file_type]);
+    void getSignedUrl(attachment.storage_path, SIGNED_URL_TTL_SECONDS)
+      .then(setUrl)
+      .catch(() => setUrl(null));
+  }, [attachment.storage_path]);
 
   if (attachment.file_type === 'image') {
     return url ? (
@@ -478,11 +471,18 @@ function AttachmentItem({ attachment }: { attachment: WorkMessage['work_message_
     );
   }
 
+  if (attachment.file_type === 'audio') {
+    return <ChatAudioPlayer url={url} durationSeconds={attachment.duration_seconds} />;
+  }
+
+  if (attachment.file_type === 'video') {
+    return <ChatVideoPlayer url={url} />;
+  }
+
   return (
     <View style={styles.attachmentMeta}>
       <Text variant="caption" color="textSecondary">
-        {attachment.file_type === 'video' ? 'Video' : attachment.file_type === 'audio' ? 'Audio' : 'Arquivo'}
-        {attachment.duration_seconds ? ` (${Math.round(attachment.duration_seconds)}s)` : ''}
+        Arquivo
       </Text>
     </View>
   );

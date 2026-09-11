@@ -1,6 +1,7 @@
 import { type QueryClient } from '@tanstack/react-query';
 import { Alert } from 'react-native';
 
+import { clearCachedProfile } from '@/lib/auth/profile-cache';
 import { clearAll, getPendingCount } from '@/lib/offline/outbox';
 import { supabase } from '@/lib/supabase/client';
 import { useSessionStore } from '@/stores/session.store';
@@ -11,6 +12,7 @@ import { useNotificationStore } from '@/stores/notification.store';
 export async function logout(queryClient: QueryClient): Promise<void> {
   await removeCurrentToken();
   await supabase.auth.signOut().catch(() => undefined);
+  await clearCachedProfile();
   try {
     await clearAll();
   } catch {

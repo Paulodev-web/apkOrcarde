@@ -47,7 +47,8 @@ async function fetchCrewOptions(workId: string): Promise<CrewOption[]> {
     .eq('work_id', workId)
     .eq('is_active', true);
 
-  if (error || !data) return [];
+  if (error) throw new Error(error.message);
+  if (!data) return [];
 
   const options: CrewOption[] = [];
   for (const team of data as Array<{
@@ -108,6 +109,13 @@ export default function DailyLogDetailScreen() {
     queryFn: () => fetchCrewOptions(workId),
     enabled: workId.length > 0,
   });
+
+  // `crew_present` guarda IDs de ficha. Quem transforma em nome legivel e a leitura.
+  const crewNames = useMemo(() => {
+    const mapa: Record<string, string> = {};
+    for (const membro of crewQuery.data ?? []) mapa[membro.id] = membro.name;
+    return mapa;
+  }, [crewQuery.data]);
 
   const snapshotQuery = useQuery({
     queryKey: ['projectSnapshot', workId],
@@ -224,7 +232,7 @@ export default function DailyLogDetailScreen() {
           submitting={submitting}
         />
       ) : log ? (
-        <DailyLogReadOnly log={log} revisions={revisions} />
+        <DailyLogReadOnly log={log} revisions={revisions} crewNames={crewNames} />
       ) : null}
     </View>
   );

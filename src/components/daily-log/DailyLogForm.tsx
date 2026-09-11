@@ -216,15 +216,23 @@ export function DailyLogForm({
               <View>
                 {crewOptions.length > 0 ? (
                   crewOptions.map((member) => {
-                    const isSelected = value.includes(member.name);
+                    // O que vai gravado e o ID da ficha, nao o nome.
+                    //
+                    // `crew_present` alimenta o gatilho `on_daily_log_approved_attendance`,
+                    // que popula `work_team_attendance` quando o engenheiro aprova o diario.
+                    // Ele faz `v_crew_id::uuid`. Mandando nome, todo insert estourava e o
+                    // `EXCEPTION WHEN OTHERS` do gatilho engolia como aviso: a presenca nunca
+                    // era registrada e ninguem ficava sabendo, porque o portal so mostra a
+                    // contagem. Quem exibe nome e a tela, a partir do ID.
+                    const isSelected = value.includes(member.id);
                     return (
                       <Pressable
                         key={member.id}
                         onPress={() => {
                           if (isSelected) {
-                            onChange(value.filter((n: string) => n !== member.name));
+                            onChange(value.filter((id: string) => id !== member.id));
                           } else {
-                            onChange([...value, member.name]);
+                            onChange([...value, member.id]);
                           }
                         }}
                         style={styles.checkboxRow}
@@ -238,7 +246,9 @@ export function DailyLogForm({
                   })
                 ) : (
                   <Text style={styles.hintText}>
-                    Equipe nao cadastrada. Digite os nomes separados por virgula.
+                    Equipe nao cadastrada. Digite os nomes separados por virgula. Eles ficam
+                    registrados no diario, mas so entram na folha de presenca depois que o
+                    engenheiro cadastrar a equipe da obra.
                   </Text>
                 )}
                 {crewOptions.length === 0 ? (
