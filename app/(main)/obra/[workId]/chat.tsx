@@ -52,10 +52,21 @@ type LocalPayload = {
 
 const MESSAGES_KEY = 'messages';
 
+// As colunas reais em work_messages/work_message_attachments sao `body` e
+// `kind` — nomes vindos do contrato de INPUT da RPC rpc_send_work_message
+// (`content`, `file_type`), nao da tabela. Sem o alias, toda mensagem
+// recebida chegava com texto e midia sempre undefined.
 async function fetchMessages(workId: string, cursor?: string) {
   let query = supabase
     .from('work_messages')
-    .select('*, work_message_attachments(*)')
+    .select(
+      `id, work_id, sender_id, content:body, client_event_id, created_at,
+       read_by_engineer_at, read_by_manager_at,
+       work_message_attachments (
+         id, message_id, file_type:kind, storage_path, mime_type,
+         file_size_bytes:size_bytes, width, height, duration_seconds, created_at
+       )`,
+    )
     .eq('work_id', workId)
     .order('created_at', { ascending: false })
     .limit(CHAT_LIMITS.MESSAGES_PER_PAGE);

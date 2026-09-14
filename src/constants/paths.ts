@@ -31,6 +31,17 @@ export function poleInstallationMediaPath(
   return `${workId}/pole-installations/${installationId}/${fileUuid}.${normalizeExt(ext)}`;
 }
 
+export function poleEquipmentMediaPath(
+  workId: string,
+  equipmentId: string,
+  fileUuid: string,
+  ext: string,
+): string {
+  // Mesmo prefixo `pole-installations` que o handler usa hoje (uploadMedia
+  // recalcula o path a partir de `feature`+`recordId`, entao precisa bater).
+  return `${workId}/pole-installations/${equipmentId}/${fileUuid}.${normalizeExt(ext)}`;
+}
+
 export function checklistItemMediaPath(
   workId: string,
   checklistId: string,

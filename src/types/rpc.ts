@@ -248,14 +248,8 @@ export type AddAlertCommentOutput = {
 };
 
 // --- Equipamento montado no poste ---
-
-export type RecordPoleEquipmentItemInput = {
-  material_id: string | null;
-  label: string;
-  quantity: number;
-  /** false = montou algo que nao estava no projeto. O engenheiro precisa ver. */
-  from_project: boolean;
-};
+// Sem catalogo: uma foto do equipamento e uma descricao livre. O lancamento
+// de rede (trecho de cabo entre postes) saiu do produto.
 
 export type RecordPoleEquipmentMediaInput = {
   kind: 'image' | 'video';
@@ -270,39 +264,15 @@ export type RecordPoleEquipmentInput = {
   work_id: string;
   equipment_id: string;
   installation_id: string;
-  notes: string | null;
+  /** Obrigatoria: e o que descreve o que foi montado, sem catalogo. */
+  notes: string;
   installed_at: string;
   client_event_id: string;
-  items: RecordPoleEquipmentItemInput[];
+  /** Ao menos uma foto e obrigatoria. */
   media: RecordPoleEquipmentMediaInput[];
 };
 
 export type RecordPoleEquipmentOutput = {
   equipmentId: string;
-  isNew: boolean;
-};
-
-// --- Trecho de rede lancado ---
-
-export type RecordNetworkSpanInput = {
-  work_id: string;
-  span_id: string;
-  connection_id: string | null;
-  from_post_id: string | null;
-  to_post_id: string | null;
-  category: 'BT' | 'MT' | 'iluminacao';
-  meters: number;
-  meters_planned: number | null;
-  cable_type: string | null;
-  notes: string | null;
-  gps_lat: number | null;
-  gps_lng: number | null;
-  installed_at: string;
-  client_event_id: string;
-  media: RecordPoleEquipmentMediaInput[];
-};
-
-export type RecordNetworkSpanOutput = {
-  spanId: string;
   isNew: boolean;
 };

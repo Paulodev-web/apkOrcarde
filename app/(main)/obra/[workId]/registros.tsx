@@ -7,7 +7,6 @@ import {
   MapPin,
   RefreshCw,
   Rows3,
-  Waves,
   Wrench,
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
@@ -25,7 +24,7 @@ import { spacing } from '@/design-system/tokens/spacing';
 import { getAllItems } from '@/lib/offline/outbox';
 import { supabase } from '@/lib/supabase/client';
 
-type Kind = 'poste' | 'equipamento' | 'rede' | 'alerta' | 'marco';
+type Kind = 'poste' | 'equipamento' | 'alerta' | 'marco';
 
 type Entry = {
   id: string;
@@ -41,7 +40,7 @@ type Entry = {
 /**
  * Os filtros sao o dia do gerente, mais a fila.
  *
- * Poste, equipamento e rede sao o que ele faz o dia inteiro. "Na fila" e o que
+ * Poste e equipamento sao o que ele faz o dia inteiro. "Na fila" e o que
  * ele confere quando o sinal volta. Impedimento e marco continuam aparecendo em
  * "Tudo", mas sao raros demais para ocupar um chip.
  */
@@ -49,14 +48,12 @@ const FILTERS: { key: Kind | 'all' | 'queued'; label: string }[] = [
   { key: 'all', label: 'Tudo' },
   { key: 'poste', label: 'Postes' },
   { key: 'equipamento', label: 'Equipamento' },
-  { key: 'rede', label: 'Rede' },
   { key: 'queued', label: 'Na fila' },
 ];
 
 const VISUAL: Record<Kind, { icon: LucideIcon; tint: string; bg: string; border: string }> = {
   poste: { icon: MapPin, tint: colors.primary, bg: colors.infoBg, border: colors.infoBorder },
   equipamento: { icon: Wrench, tint: colors.success, bg: colors.successBg, border: colors.successBorder },
-  rede: { icon: Waves, tint: colors.info, bg: colors.infoBg, border: colors.infoBorder },
   alerta: { icon: AlertTriangle, tint: colors.danger, bg: colors.dangerBg, border: colors.dangerBorder },
   marco: { icon: Flag, tint: colors.success, bg: colors.successBg, border: colors.successBorder },
 };
@@ -65,7 +62,6 @@ const VISUAL: Record<Kind, { icon: LucideIcon; tint: string; bg: string; border:
 const QUEUED_KIND: Record<string, { kind: Kind; title: string }> = {
   record_pole_installation: { kind: 'poste', title: 'Poste' },
   record_pole_equipment: { kind: 'equipamento', title: 'Equipamento' },
-  record_network_span: { kind: 'rede', title: 'Trecho de rede' },
   open_alert: { kind: 'alerta', title: 'Alerta' },
   resolve_alert_in_field: { kind: 'alerta', title: 'Alerta resolvido' },
   add_alert_comment: { kind: 'alerta', title: 'Comentário em alerta' },
@@ -92,7 +88,7 @@ function umRelacionado<T>(v: unknown): T | null {
 }
 
 async function fetchServerEntries(workId: string): Promise<Entry[]> {
-  const [poles, equipamentos, trechos, alerts, events] = await Promise.all([
+  const [poles, equipamentos, alerts, events] = await Promise.all([
     supabase
       .from('work_pole_installations')
       .select('id, numbering, pole_type, installed_at')
@@ -103,15 +99,7 @@ async function fetchServerEntries(workId: string): Promise<Entry[]> {
     supabase
       .from('work_pole_equipment')
       .select(
-        'id, installed_at, work_pole_installations:installation_id (numbering), work_pole_equipment_items (label, quantity)',
-      )
-      .eq('work_id', workId)
-      .order('installed_at', { ascending: false })
-      .limit(30),
-    supabase
-      .from('work_network_spans')
-      .select(
-        'id, installed_at, category, meters, origem:from_post_id (numbering), destino:to_post_id (numbering)',
+        'id, installed_at, notes, work_pole_installations:installation_id (numbering)',
       )
       .eq('work_id', workId)
       .order('installed_at', { ascending: false })
@@ -147,35 +135,14 @@ async function fetchServerEntries(workId: string): Promise<Entry[]> {
   }
 
   for (const e of equipamentos.data ?? []) {
-    const itens = (e.work_pole_equipment_items ?? []) as { label: string; quantity: number }[];
-    const total = itens.reduce((soma, i) => soma + (Number(i.quantity) || 0), 0);
     const poste = umRelacionado<{ numbering: string | null }>(e.work_pole_installations)?.numbering;
     out.push({
       id: `equipamento-${e.id}`,
       kind: 'equipamento',
-      title: poste
-        ? `${total} estrutura${total === 1 ? '' : 's'} no poste ${poste}`
-        : `${total} estrutura${total === 1 ? '' : 's'} montada${total === 1 ? '' : 's'}`,
-      detail: itens.map((i) => i.label).join(', ') || 'equipamento montado',
+      title: poste ? `Equipamento no poste ${poste}` : 'Equipamento montado',
+      detail: (e.notes as string | null) ?? 'sem descrição',
       at: e.installed_at as string,
       href: `/(main)/obra/${workId}/postes`,
-    });
-  }
-
-  for (const s of trechos.data ?? []) {
-    const origem = umRelacionado<{ numbering: string | null }>(s.origem)?.numbering;
-    const destino = umRelacionado<{ numbering: string | null }>(s.destino)?.numbering;
-    const metros = Number(s.meters ?? 0);
-    out.push({
-      id: `rede-${s.id}`,
-      kind: 'rede',
-      title:
-        origem && destino
-          ? `Trecho ${origem} → ${destino}, ${Math.round(metros)} m`
-          : `Trecho de ${Math.round(metros)} m`,
-      detail: `rede ${s.category as string}`,
-      at: s.installed_at as string,
-      href: `/(main)/obra/${workId}/rede`,
     });
   }
 
@@ -300,9 +267,8 @@ export default function RegistrosScreen() {
       );
     });
     const postes = doDia.filter((e) => e.kind === 'poste').length;
-    const trechos = doDia.filter((e) => e.kind === 'rede').length;
     const equipamentos = doDia.filter((e) => e.kind === 'equipamento').length;
-    return { postes, trechos, equipamentos, total: doDia.length };
+    return { postes, equipamentos, total: doDia.length };
   }, [serverQ.data, queuedQ.data]);
 
   return (
@@ -335,7 +301,6 @@ export default function RegistrosScreen() {
       {hoje.total > 0 ? (
         <View style={styles.resumoHoje}>
           <ResumoNumero valor={hoje.postes} rotulo={hoje.postes === 1 ? 'poste' : 'postes'} />
-          <ResumoNumero valor={hoje.trechos} rotulo={hoje.trechos === 1 ? 'trecho' : 'trechos'} />
           <ResumoNumero
             valor={hoje.equipamentos}
             rotulo={hoje.equipamentos === 1 ? 'montagem' : 'montagens'}

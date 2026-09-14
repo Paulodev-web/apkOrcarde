@@ -14,7 +14,6 @@ import {
   recoverStuckItems,
 } from './outbox';
 import { handleRecordPoleEquipment } from './handlers/equipment.handler';
-import { handleRecordNetworkSpan } from './handlers/span.handler';
 import { getHandler, registerHandler } from './sync-handlers';
 import { handleSendMessage } from './handlers/chat.handler';
 import { handlePublishDailyLog } from './handlers/daily-log.handler';
@@ -40,7 +39,6 @@ registerHandler('open_alert', handleOpenAlert);
 registerHandler('resolve_alert_in_field', handleResolveAlert);
 registerHandler('add_alert_comment', handleAddAlertComment);
 registerHandler('record_pole_equipment', handleRecordPoleEquipment);
-registerHandler('record_network_span', handleRecordNetworkSpan);
 
 let running = false;
 let wakeTimer: ReturnType<typeof setTimeout> | null = null;

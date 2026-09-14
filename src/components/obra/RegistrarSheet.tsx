@@ -5,7 +5,6 @@ import {
   ChevronRight,
   Flag,
   MapPin,
-  Waves,
   Wrench,
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
@@ -43,9 +42,10 @@ type Row = {
 /**
  * A folha do botao central.
  *
- * Os tres primeiros sao o que se executa numa rede eletrica: levanta o poste,
- * monta o equipamento nele, lanca o cabo entre postes. Sao o dia inteiro do
- * gerente, entao ocupam a faixa larga e vem antes de tudo.
+ * Os dois primeiros sao o que se executa numa rede eletrica: levanta o poste
+ * e monta o equipamento nele. Sao o dia inteiro do gerente, entao ocupam a
+ * faixa larga e vem antes de tudo. O lancamento de rede (trecho de cabo entre
+ * postes) saiu do produto.
  *
  * Impedimento vem logo abaixo, sozinho e em vermelho: e o registro mais raro
  * e o mais urgente — quando acontece, a obra parou. Nao pode dividir espaco
@@ -74,12 +74,6 @@ export function RegistrarSheet({ open, onClose, workId }: Props) {
       label: 'Equipamento',
       hint: 'no poste',
       href: `/(main)/obra/${workId}/equipamento`,
-    },
-    {
-      icon: Waves,
-      label: 'Rede',
-      hint: 'trecho',
-      href: `/(main)/obra/${workId}/rede`,
     },
   ];
 

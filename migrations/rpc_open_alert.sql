@@ -79,14 +79,14 @@ BEGIN
     gps_lat, gps_lng, gps_accuracy_meters, client_event_id
   ) VALUES (
     v_alert_id, v_work_id, v_created_by, v_severity, v_category, v_title, v_description,
-    v_gps_lat, v_gps_lng, v_gps_accuracy, v_client_event_id
+    v_gps_lat, v_gps_lng, v_gps_accuracy, v_client_event_id::UUID
   )
   ON CONFLICT (client_event_id) DO NOTHING
   RETURNING id INTO v_result_id;
 
   -- 5. Idempotencia: buscar existente
   IF v_result_id IS NULL THEN
-    SELECT id INTO v_result_id FROM work_alerts WHERE client_event_id = v_client_event_id;
+    SELECT id INTO v_result_id FROM work_alerts WHERE client_event_id = v_client_event_id::UUID;
     v_is_new := FALSE;
   END IF;
 

@@ -127,7 +127,7 @@ BEGIN
         completed_at = CASE WHEN v_is_completed THEN now() ELSE NULL END,
         completed_by = CASE WHEN v_is_completed THEN v_actor_id ELSE NULL END,
         notes = v_notes,
-        client_event_id = v_client_event_id
+        client_event_id = v_client_event_id::UUID
     WHERE id = v_item_id;
 
   -- ---------------------------------------------------------------

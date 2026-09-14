@@ -91,7 +91,7 @@ BEGIN
   INSERT INTO work_milestone_events (
     id, milestone_id, work_id, event_type, actor_id, actor_role, notes, client_event_id
   ) VALUES (
-    v_event_id, v_milestone_id, v_work_id, 'reported', v_actor_id, 'manager', v_notes, v_client_event_id
+    v_event_id, v_milestone_id, v_work_id, 'reported', v_actor_id, 'manager', v_notes, v_client_event_id::UUID
   )
   ON CONFLICT (client_event_id) WHERE client_event_id IS NOT NULL
   DO NOTHING
@@ -103,7 +103,7 @@ BEGIN
   IF v_result_event_id IS NULL THEN
     SELECT id INTO v_result_event_id
       FROM work_milestone_events
-      WHERE client_event_id = v_client_event_id;
+      WHERE client_event_id = v_client_event_id::UUID;
 
     v_is_new := FALSE;
   END IF;
