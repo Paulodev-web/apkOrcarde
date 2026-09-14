@@ -59,14 +59,14 @@ BEGIN
   INSERT INTO work_alert_updates (
     alert_id, work_id, actor_id, actor_role, update_type, notes, client_event_id
   ) VALUES (
-    v_alert_id, v_work_id, v_actor_id, 'manager', 'resolved_in_field', v_resolution_notes, v_client_event_id
+    v_alert_id, v_work_id, v_actor_id, 'manager', 'resolved_in_field', v_resolution_notes, v_client_event_id::UUID
   )
   ON CONFLICT (client_event_id) WHERE client_event_id IS NOT NULL
   DO NOTHING
   RETURNING id INTO v_result_update_id;
 
   IF v_result_update_id IS NULL THEN
-    SELECT id INTO v_result_update_id FROM work_alert_updates WHERE client_event_id = v_client_event_id;
+    SELECT id INTO v_result_update_id FROM work_alert_updates WHERE client_event_id = v_client_event_id::UUID;
     v_is_new := FALSE;
   END IF;
 

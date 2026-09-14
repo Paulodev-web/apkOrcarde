@@ -105,7 +105,7 @@ BEGIN
   SELECT r.id, r.daily_log_id, r.revision_number
     INTO v_revision_id, v_daily_log_id, v_revision_number
     FROM work_daily_log_revisions r
-    WHERE r.client_event_id = v_client_event_id;
+    WHERE r.client_event_id = v_client_event_id::UUID;
 
   IF FOUND THEN
     -- Revision ja existe (retry idempotente)
@@ -189,7 +189,7 @@ BEGIN
     v_materials_consumed,
     v_incidents,
     v_rejection_reason,
-    v_client_event_id
+    v_client_event_id::UUID
   );
 
   -- ---------------------------------------------------------------
