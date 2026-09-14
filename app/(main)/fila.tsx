@@ -13,7 +13,6 @@ import {
   MapPin,
   MessageCircle,
   RefreshCw,
-  Waves,
   Wifi,
   WifiOff,
   Wrench,
@@ -50,7 +49,6 @@ const ACTION_META: Record<string, ActionMeta> = {
   resolve_alert_in_field: { label: 'Alerta resolvido', icon: AlertTriangle, tint: colors.danger, bg: colors.dangerBg },
   add_alert_comment: { label: 'Comentário em alerta', icon: AlertTriangle, tint: colors.danger, bg: colors.dangerBg },
   record_pole_equipment: { label: 'Equipamento', icon: Wrench, tint: colors.primary, bg: colors.infoBg },
-  record_network_span: { label: 'Trecho de rede', icon: Waves, tint: colors.primary, bg: colors.infoBg },
 };
 
 function metaFor(actionType: string): ActionMeta {

@@ -60,8 +60,6 @@ export default function WorkLayout() {
         {/* Fluxos de registro: alcancados pela folha do +, nunca pela barra. */}
         <Tabs.Screen name="equipamento" options={{ href: null }} />
         <Tabs.Screen name="equipamento-poste" options={{ href: null }} />
-        <Tabs.Screen name="rede" options={{ href: null }} />
-        <Tabs.Screen name="rede-trecho" options={{ href: null }} />
         <Tabs.Screen name="marcos" options={{ href: null }} />
         <Tabs.Screen name="diario/index" options={{ href: null }} />
         <Tabs.Screen name="diario/[dailyLogId]" options={{ href: null }} />

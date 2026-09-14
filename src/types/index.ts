@@ -50,8 +50,7 @@ export type OutboxActionType =
   | 'add_alert_comment'
   | 'mark_checklist_item'
   | 'set_checklist_in_progress'
-  | 'record_pole_equipment'
-  | 'record_network_span';
+  | 'record_pole_equipment';
 
 export type OutboxItem = {
   id: number;
