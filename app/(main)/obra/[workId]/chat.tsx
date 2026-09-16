@@ -11,6 +11,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Keyboard,
   Pressable,
   StyleSheet,
   TextInput,
@@ -101,6 +102,35 @@ export default function ChatScreen() {
   const [localItems, setLocalItems] = useState<OutboxItem[]>([]);
   const inputRef = useRef<TextInput>(null);
 
+  // Altura do teclado, para erguer o campo de escrita.
+  //
+  // O Android promete fazer isto sozinho com adjustResize, e o manifesto pede
+  // adjustResize. Só que a partir do Android 15 a janela é edge-to-edge e o
+  // resize automático não acontece mais: o teclado sobe POR CIMA e empurra o
+  // campo, os botões de mídia e o enviar para fora da tela. Quem estava no
+  // canteiro tocava no campo e ele sumia, o que da ponta do usuário é
+  // exatamente "não tem a opção de escrever".
+  //
+  // KeyboardAvoidingView não resolve: com behavior undefined no Android ele
+  // delega justamente ao resize que não vem, e com 'padding' briga com o
+  // resize nos aparelhos onde ele ainda funciona. Ler a altura do evento e
+  // aplicar como padding é o que se comporta igual nos dois casos, e é só
+  // JavaScript, então chega por atualização sem precisar de APK novo.
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const aoAbrir = Keyboard.addListener('keyboardDidShow', (e) => {
+      setKeyboardHeight(e.endCoordinates?.height ?? 0);
+    });
+    const aoFechar = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardHeight(0);
+    });
+    return () => {
+      aoAbrir.remove();
+      aoFechar.remove();
+    };
+  }, []);
+
   const {
     data,
     fetchNextPage,
@@ -115,12 +145,33 @@ export default function ChatScreen() {
     enabled: workId.length > 0,
   });
 
+  // Guarda quais itens locais existiam na última varredura. Quando um deles
+  // some, ele sincronizou: a bolha local vai desaparecer e a mensagem remota
+  // precisa ser buscada, senão a mensagem enviada some da tela. É o caminho
+  // de quem estava offline, onde o Realtime não chega para avisar.
+  const knownLocalIds = useRef<Set<string>>(new Set());
+
   const refreshLocalItems = useCallback(async () => {
     try {
       const items = await getPendingItemsByAction('send_message', workId);
+
+      const atuais = new Set(items.map((i) => i.client_event_id));
+      let algumSincronizou = false;
+      for (const id of knownLocalIds.current) {
+        if (!atuais.has(id)) {
+          algumSincronizou = true;
+          break;
+        }
+      }
+      knownLocalIds.current = atuais;
+
       setLocalItems(items);
+
+      if (algumSincronizou) {
+        void queryClient.invalidateQueries({ queryKey: [MESSAGES_KEY, workId] });
+      }
     } catch { /* swallow */ }
-  }, [workId]);
+  }, [workId, queryClient]);
 
   useEffect(() => {
     void refreshLocalItems();
@@ -139,8 +190,16 @@ export default function ChatScreen() {
     filter: `work_id=eq.${workId}`,
     onEvent: (payload) => {
       const msg = payload.new as WorkMessage;
-      if (msg.sender_id === userId) return;
+
+      // Invalida SEMPRE, inclusive para a própria mensagem. Antes havia um
+      // return aqui quando o remetente era eu, e o efeito era a mensagem
+      // enviada sumir da tela: a bolha local desaparece assim que o outbox
+      // sincroniza, e sem esta invalidação a versão remota nunca era buscada.
+      // A mensagem ficava gravada no banco e invisível para quem a escreveu.
       void queryClient.invalidateQueries({ queryKey: [MESSAGES_KEY, workId] });
+
+      // Marcar como lida, porém, só vale para o que veio do outro lado.
+      if (msg.sender_id === userId) return;
       void markMessagesAsRead(workId, userId);
     },
   });
@@ -349,7 +408,7 @@ export default function ChatScreen() {
         </View>
       ) : null}
 
-      <View style={styles.composer}>
+      <View style={[styles.composer, keyboardHeight > 0 ? { marginBottom: keyboardHeight } : null]}>
         <IconButton
           icon={Camera}
           variant="default"
