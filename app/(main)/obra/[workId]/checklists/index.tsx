@@ -1,7 +1,9 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
+
+import { useWorkId } from '@/hooks/useWorkId';
 import { ChevronLeft, ChevronRight, ClipboardList } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -48,8 +50,7 @@ async function fetchChecklists(workId: string): Promise<ChecklistWithItems[]> {
 }
 
 export default function ChecklistListScreen() {
-  const params = useLocalSearchParams<{ workId: string }>();
-  const workId = typeof params.workId === 'string' ? params.workId : '';
+  const workId = useWorkId();
   const router = useRouter();
   const queryClient = useQueryClient();
   const isOnline = useConnectivityStore((s) => s.isOnline);

@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 import { FieldTabBar, type TabSpec } from '@/components/navigation/FieldTabBar';
+import { WorkIdProvider } from '@/hooks/useWorkId';
 import { RegistrarSheet } from '@/components/obra/RegistrarSheet';
 import { FAB } from '@/design-system/composed/FAB';
 import { colors } from '@/design-system/tokens/colors';
@@ -43,45 +44,47 @@ export default function WorkLayout() {
   ];
 
   return (
-    <View style={styles.root}>
-      <Tabs
-        screenOptions={{ headerShown: false }}
-        tabBar={(props) => <FieldTabBar {...props} tabs={tabs} centerGap />}
-      >
-        <Tabs.Screen name="postes" />
-        <Tabs.Screen name="registros" />
-        <Tabs.Screen name="chat" />
-        <Tabs.Screen name="equipe" />
+    <WorkIdProvider workId={id}>
+      <View style={styles.root}>
+        <Tabs
+          screenOptions={{ headerShown: false }}
+          tabBar={(props) => <FieldTabBar {...props} tabs={tabs} centerGap />}
+        >
+          <Tabs.Screen name="postes" />
+          <Tabs.Screen name="registros" />
+          <Tabs.Screen name="chat" />
+          <Tabs.Screen name="equipe" />
 
-        {/* `index` so existe para redirecionar quem chega em /obra/{id} direto,
-            por deep link de notificacao ou por historico. */}
-        <Tabs.Screen name="index" options={{ href: null }} />
+          {/* `index` so existe para redirecionar quem chega em /obra/{id} direto,
+              por deep link de notificacao ou por historico. */}
+          <Tabs.Screen name="index" options={{ href: null }} />
 
-        {/* Fluxos de registro: alcancados pela folha do +, nunca pela barra. */}
-        <Tabs.Screen name="equipamento" options={{ href: null }} />
-        <Tabs.Screen name="equipamento-poste" options={{ href: null }} />
-        <Tabs.Screen name="marcos" options={{ href: null }} />
-        <Tabs.Screen name="diario/index" options={{ href: null }} />
-        <Tabs.Screen name="diario/[dailyLogId]" options={{ href: null }} />
-        <Tabs.Screen name="checklists/index" options={{ href: null }} />
-        <Tabs.Screen name="checklists/[checklistId]" options={{ href: null }} />
-        <Tabs.Screen name="alertas/index" options={{ href: null }} />
-        <Tabs.Screen name="alertas/novo" options={{ href: null }} />
-        <Tabs.Screen name="alertas/[alertId]" options={{ href: null }} />
-      </Tabs>
+          {/* Fluxos de registro: alcancados pela folha do +, nunca pela barra. */}
+          <Tabs.Screen name="equipamento" options={{ href: null }} />
+          <Tabs.Screen name="equipamento-poste" options={{ href: null }} />
+          <Tabs.Screen name="marcos" options={{ href: null }} />
+          <Tabs.Screen name="diario/index" options={{ href: null }} />
+          <Tabs.Screen name="diario/[dailyLogId]" options={{ href: null }} />
+          <Tabs.Screen name="checklists/index" options={{ href: null }} />
+          <Tabs.Screen name="checklists/[checklistId]" options={{ href: null }} />
+          <Tabs.Screen name="alertas/index" options={{ href: null }} />
+          <Tabs.Screen name="alertas/novo" options={{ href: null }} />
+          <Tabs.Screen name="alertas/[alertId]" options={{ href: null }} />
+        </Tabs>
 
-      {showFab ? (
-        <FAB
-          icon={Plus}
-          position="bottom-center"
-          bottom={62}
-          accessibilityLabel="Registrar"
-          onPress={() => setRegistrarOpen(true)}
-        />
-      ) : null}
+        {showFab ? (
+          <FAB
+            icon={Plus}
+            position="bottom-center"
+            bottom={62}
+            accessibilityLabel="Registrar"
+            onPress={() => setRegistrarOpen(true)}
+          />
+        ) : null}
 
-      <RegistrarSheet open={registrarOpen} onClose={() => setRegistrarOpen(false)} workId={id} />
-    </View>
+        <RegistrarSheet open={registrarOpen} onClose={() => setRegistrarOpen(false)} workId={id} />
+      </View>
+    </WorkIdProvider>
   );
 }
 

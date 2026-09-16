@@ -145,6 +145,53 @@ describe('outbox queue', () => {
   });
 });
 
+describe('enqueue rejeita payload sem obra', () => {
+  // Regressao do chat que nao enviava (16/09/2026): a tela mandava work_id ''
+  // e o item ficava retentando um payload que o Postgres nunca aceitaria
+  // (22P02, invalid input syntax for type uuid: ""). O gerente via o texto
+  // sumir do campo e nada chegava do outro lado.
+  it('recusa work_id vazio', async () => {
+    await expect(
+      enqueue({
+        client_event_id: 'evt-sem-obra',
+        action_type: 'send_message',
+        payload: { work_id: '', content: 'ola' },
+      }),
+    ).rejects.toThrow(/Obra nao identificada/);
+    expect(await getPendingCount()).toBe(0);
+  });
+
+  it('recusa work_id ausente quando o payload fala de obra', async () => {
+    await expect(
+      enqueue({
+        client_event_id: 'evt-sem-obra-2',
+        action_type: 'report_milestone',
+        payload: { work_id: undefined, milestone_id: 'm-1' },
+      }),
+    ).rejects.toThrow(/Obra nao identificada/);
+    expect(await getPendingCount()).toBe(0);
+  });
+
+  it('aceita work_id preenchido', async () => {
+    const id = await enqueue({
+      client_event_id: 'evt-com-obra',
+      action_type: 'send_message',
+      payload: { work_id: 'ba6feced-1c01-4321-afdd-92712eccc5d7', content: 'ola' },
+    });
+    expect(id).toBeGreaterThan(0);
+    expect(await getPendingCount()).toBe(1);
+  });
+
+  it('nao opina sobre payload que nao carrega work_id', async () => {
+    const id = await enqueue({
+      client_event_id: 'evt-outro',
+      action_type: 'send_message',
+      payload: { foo: 'bar' },
+    });
+    expect(id).toBeGreaterThan(0);
+  });
+});
+
 describe('computeNextRetryIso', () => {
   it('uses the configured backoff steps', () => {
     const now = new Date('2026-05-09T12:00:00.000Z').getTime();

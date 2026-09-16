@@ -10,7 +10,9 @@ import {
   Wrench,
 } from 'lucide-react-native';
 import type { LucideIcon } from 'lucide-react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
+
+import { useWorkId } from '@/hooks/useWorkId';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 
@@ -219,7 +221,7 @@ async function fetchQueuedEntries(workId: string): Promise<Entry[]> {
  * em que o servidor confirmou.
  */
 export default function RegistrosScreen() {
-  const { workId } = useLocalSearchParams<{ workId: string }>();
+  const workId = useWorkId();
   const id = typeof workId === 'string' ? workId : '';
   const router = useRouter();
   const [filter, setFilter] = useState<Kind | 'all' | 'queued'>('all');

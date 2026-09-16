@@ -1,7 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
-import { Lock, Menu, RefreshCw } from 'lucide-react-native';
+import { Download, Lock, RefreshCw } from 'lucide-react-native';
 import { useCallback, useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { Linking, Pressable, View } from 'react-native';
@@ -17,6 +17,7 @@ import { ScreenHeader } from '@/design-system/layouts/ScreenHeader';
 import { ReadOnlyField } from '@/design-system/composed/ReadOnlyField';
 import { spacing } from '@/design-system/tokens/spacing';
 import { changePassword } from '@/lib/auth/session';
+import { useAppUpdate } from '@/hooks/useAppUpdate';
 import { captureBreadcrumb } from '@/lib/sentry';
 import { outboxEmitter } from '@/lib/offline/outbox';
 import { useSessionStore } from '@/stores/session.store';
@@ -55,6 +56,16 @@ export default function ConfiguracoesScreen() {
   const forceSync = useCallback(() => {
     outboxEmitter.emit();
   }, []);
+
+  const update = useAppUpdate();
+  const updateBusy =
+    update.state.status === 'checking' || update.state.status === 'downloading';
+  const updateLabel =
+    update.state.status === 'checking'
+      ? 'Verificando…'
+      : update.state.status === 'downloading'
+        ? 'Baixando atualização…'
+        : 'Buscar atualização';
 
   return (
     <ScreenContainer scrollable background="muted">
@@ -95,6 +106,34 @@ export default function ConfiguracoesScreen() {
       <FormSection title="Sobre o app">
         <ReadOnlyField label="Versão" value={version} />
         <ReadOnlyField label="Ambiente" value={String(appVariant)} />
+        <ReadOnlyField label="Atualização" value={update.currentId ?? 'original do APK'} />
+
+        {/* Sem isto, receber uma correção dependia do expo-updates aplicar
+            sozinho no cold start seguinte — e fechar pelo gesto de apps
+            recentes costuma nem matar o processo. Era preciso guiar o gerente
+            pelo "Forçar parada" do Android. Aqui ele toca e o app reinicia já
+            atualizado. */}
+        <Button
+          variant="secondary"
+          icon={Download}
+          onPress={() => void update.check()}
+          loading={updateBusy}
+          disabled={!update.available}
+        >
+          {updateLabel}
+        </Button>
+
+        {update.state.status === 'upToDate' ? (
+          <Text variant="caption" color="textSecondary">
+            Você já está na versão mais recente.
+          </Text>
+        ) : null}
+
+        {update.state.status === 'error' ? (
+          <Text variant="caption" color="dangerText">
+            {update.state.message}
+          </Text>
+        ) : null}
       </FormSection>
 
       <ChangePasswordSheet

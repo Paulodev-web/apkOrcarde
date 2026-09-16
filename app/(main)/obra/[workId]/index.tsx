@@ -1,6 +1,8 @@
 'use client';
 
-import { Redirect, useLocalSearchParams } from 'expo-router';
+import { Redirect } from 'expo-router';
+
+import { useWorkId } from '@/hooks/useWorkId';
 
 /**
  * A porta da obra leva para a planta.
@@ -15,7 +17,7 @@ import { Redirect, useLocalSearchParams } from 'expo-router';
  * navegacao apontando para /obra/{id}.
  */
 export default function ObraIndexScreen() {
-  const { workId } = useLocalSearchParams<{ workId: string }>();
+  const workId = useWorkId();
   const id = typeof workId === 'string' ? workId : '';
   return <Redirect href={`/(main)/obra/${id}/postes` as never} />;
 }

@@ -2,6 +2,8 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+
+import { useWorkId } from '@/hooks/useWorkId';
 import { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 
@@ -40,28 +42,28 @@ async function fetchDailyLogDetail(
   return data as WorkDailyLog & { work_daily_log_revisions: WorkDailyLogRevision[] };
 }
 
+// Mesmas colunas inexistentes da aba Equipe (`work_team.name`,
+// `work_team.is_active`, `crew_members.name`): o nome real e `full_name` e a
+// alocacao vigente e `deallocated_at IS NULL`. Aqui o 400 aparecia como lista
+// de equipe vazia na hora de montar o diario.
 async function fetchCrewOptions(workId: string): Promise<CrewOption[]> {
   const { data, error } = await supabase
     .from('work_team')
-    .select('id, name, is_active, crew_members(id, name, is_active)')
+    .select('id, crew_members(id, full_name, is_active)')
     .eq('work_id', workId)
-    .eq('is_active', true);
+    .is('deallocated_at', null);
 
   if (error) throw new Error(error.message);
   if (!data) return [];
 
   const options: CrewOption[] = [];
-  for (const team of data as Array<{
+  for (const team of data as unknown as {
     id: string;
-    name: string;
-    crew_members: Array<{ id: string; name: string; is_active: boolean }>;
-  }>) {
-    if (team.crew_members) {
-      for (const member of team.crew_members) {
-        if (member.is_active) {
-          options.push({ id: member.id, name: member.name });
-        }
-      }
+    crew_members: { id: string; full_name: string; is_active: boolean } | null;
+  }[]) {
+    const member = team.crew_members;
+    if (member && member.is_active) {
+      options.push({ id: member.id, name: member.full_name });
     }
   }
   return options;
@@ -87,7 +89,7 @@ async function fetchProjectSnapshot(
 
 export default function DailyLogDetailScreen() {
   const params = useLocalSearchParams<{ workId: string; dailyLogId: string; logDate?: string }>();
-  const workId = typeof params.workId === 'string' ? params.workId : '';
+  const workId = useWorkId();
   const dailyLogId = typeof params.dailyLogId === 'string' ? params.dailyLogId : '';
   const logDateParam = typeof params.logDate === 'string' ? params.logDate : '';
   const router = useRouter();

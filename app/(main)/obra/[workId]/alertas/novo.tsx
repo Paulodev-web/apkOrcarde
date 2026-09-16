@@ -1,6 +1,8 @@
 'use client';
 
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
+
+import { useWorkId } from '@/hooks/useWorkId';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 import {
@@ -33,8 +35,7 @@ const CATEGORIES: AlertCategory[] = [
 ];
 
 export default function NewAlertScreen() {
-  const params = useLocalSearchParams<{ workId: string }>();
-  const workId = typeof params.workId === 'string' ? params.workId : '';
+  const workId = useWorkId();
   const router = useRouter();
   const queryClient = useQueryClient();
 

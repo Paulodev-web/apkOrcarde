@@ -4,7 +4,12 @@ import { supabase } from './client';
 
 type RpcInput = Record<string, unknown>;
 
-const NON_RETRYABLE_CODES = new Set(['P0001', 'P0403', '23514', '23503', '23505']);
+// 22P02 entra aqui porque e erro de payload, nao de rede: e o que o Postgres
+// devolve quando um campo que deveria ser UUID chega como '' ou lixo
+// (`invalid input syntax for type uuid: ""`). Retentar um payload malformado
+// nunca melhora — so queima bateria e rede ate esgotar max_attempts, e mantem
+// o item na frente da fila FIFO atrasando o que viria depois.
+const NON_RETRYABLE_CODES = new Set(['P0001', 'P0403', '22P02', '23514', '23503', '23505']);
 
 export class RpcError extends Error {
   code: string;
@@ -49,6 +54,9 @@ export async function callRpc<T>(
     }
     if (error.code === '23503') {
       return { success: false, error: 'Referencia invalida.', code: error.code };
+    }
+    if (error.code === '22P02') {
+      return { success: false, error: 'Dados invalidos no envio.', code: error.code };
     }
     return { success: false, error: error.message ?? 'Erro desconhecido.', code: error.code ?? undefined };
   }

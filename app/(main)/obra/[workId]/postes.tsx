@@ -1,7 +1,9 @@
 'use client';
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
+
+import { useWorkId } from '@/hooks/useWorkId';
 import { AlertTriangle, ChevronRight, CloudOff, FileQuestion, WifiOff } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSharedValue } from 'react-native-reanimated';
@@ -213,7 +215,7 @@ async function fetchPlanMarks(workId: string): Promise<PlanMarks> {
  * sem sinal — antes, a URL assinada exigia rede e expirava em 30 min.
  */
 export default function PostesScreen() {
-  const { workId } = useLocalSearchParams<{ workId: string }>();
+  const workId = useWorkId();
   const id = typeof workId === 'string' ? workId : '';
   const { isOnline } = useNetworkStatus();
   const router = useRouter();
