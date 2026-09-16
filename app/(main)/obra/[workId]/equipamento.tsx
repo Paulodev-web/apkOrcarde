@@ -1,7 +1,9 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
+
+import { useWorkId } from '@/hooks/useWorkId';
 import { ChevronRight, MapPin, Wrench } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
@@ -46,7 +48,7 @@ async function fetchPostesInstalados(workId: string): Promise<Poste[]> {
 }
 
 export default function EquipamentoScreen() {
-  const { workId } = useLocalSearchParams<{ workId: string }>();
+  const workId = useWorkId();
   const id = typeof workId === 'string' ? workId : '';
   const router = useRouter();
   const [busca, setBusca] = useState('');

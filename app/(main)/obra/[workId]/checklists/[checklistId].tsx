@@ -2,6 +2,8 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+
+import { useWorkId } from '@/hooks/useWorkId';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -71,7 +73,7 @@ async function fetchChecklistDetail(checklistId: string): Promise<ChecklistWithI
 export default function ChecklistDetailScreen() {
   const params = useLocalSearchParams<{ workId: string; checklistId: string }>();
   const router = useRouter();
-  const workId = typeof params.workId === 'string' ? params.workId : '';
+  const workId = useWorkId();
   const checklistId = typeof params.checklistId === 'string' ? params.checklistId : '';
   const queryClient = useQueryClient();
   const isOnline = useConnectivityStore((s) => s.isOnline);

@@ -1,7 +1,9 @@
 'use client';
 
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack } from 'expo-router';
+
+import { useWorkId } from '@/hooks/useWorkId';
 import { Camera, ImagePlus, SendHorizontal } from 'lucide-react-native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -89,8 +91,7 @@ async function fetchMessages(workId: string, cursor?: string) {
 }
 
 export default function ChatScreen() {
-  const params = useLocalSearchParams<{ workId: string }>();
-  const workId = typeof params.workId === 'string' ? params.workId : '';
+  const workId = useWorkId();
   const userId = useSessionStore((s) => s.user?.id ?? '');
   const isOnline = useConnectivityStore((s) => s.isOnline);
   const queryClient = useQueryClient();
@@ -186,6 +187,16 @@ export default function ChatScreen() {
 
     if (!content && media.length === 0) return;
 
+    // Sem obra identificada nao ha para onde mandar. Antes daqui o id vazio
+    // seguia calado ate o Postgres e a mensagem sumia sem aviso nenhum.
+    if (!workId) {
+      Alert.alert(
+        'Obra nao identificada',
+        'Volte para a lista de obras e abra a obra de novo para enviar a mensagem.',
+      );
+      return;
+    }
+
     const clientEventId = uuidV4();
     const messageId = uuidV4();
     const now = new Date().toISOString();
@@ -228,7 +239,15 @@ export default function ChatScreen() {
         media_paths: mediaPaths.length > 0 ? mediaPaths : undefined,
       });
       await refreshLocalItems();
-    } catch { /* swallow */ }
+    } catch (err) {
+      // Engolir aqui era o que fazia a mensagem "sumir": o texto saia do campo
+      // e nada chegava do outro lado. Devolve o texto e conta o que houve.
+      setInputText(content);
+      setPendingMedia(media);
+      const message =
+        err instanceof Error ? err.message : 'Nao foi possivel colocar a mensagem na fila.';
+      Alert.alert('Mensagem nao enviada', message);
+    }
   }, [inputText, pendingMedia, workId, userId, refreshLocalItems]);
 
   const handlePickImage = useCallback(async (source: 'camera' | 'gallery') => {

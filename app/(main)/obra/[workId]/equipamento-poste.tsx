@@ -1,6 +1,8 @@
 'use client';
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
+
+import { useWorkId } from '@/hooks/useWorkId';
 import { Camera, Check, X } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Alert, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -33,7 +35,7 @@ export default function EquipamentoPosteScreen() {
     installationId: string;
     numbering: string;
   }>();
-  const workId = typeof params.workId === 'string' ? params.workId : '';
+  const workId = useWorkId();
   const installationId = typeof params.installationId === 'string' ? params.installationId : '';
   const numbering = typeof params.numbering === 'string' ? params.numbering : 'poste';
   const router = useRouter();

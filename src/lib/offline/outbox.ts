@@ -41,7 +41,33 @@ type OutboxRow = {
 
 const ACTIVE_STATUSES: readonly OutboxStatus[] = ['pending', 'uploading_media', 'calling_rpc'];
 
+/**
+ * Um payload so entra na fila se tiver work_id utilizavel.
+ *
+ * Um item com work_id '' ou ausente nunca vai sincronizar: as RPCs fazem
+ * `(input->>'work_id')::UUID` logo na primeira linha, entao o servidor devolve
+ * 22P02 (invalid input syntax for type uuid: "") ou "work_id e obrigatorio".
+ * Guardar esse item so gasta bateria e rede em retentativa e, pior, esconde do
+ * gerente que a mensagem dele nunca saiu. Falhar aqui devolve o erro para a
+ * tela, que tem como avisar.
+ */
+function assertEnqueueable(input: EnqueueOutboxInput): void {
+  const payload = input.payload;
+  if (typeof payload !== 'object' || payload === null) return;
+
+  if (!('work_id' in payload)) return;
+  const workId = (payload as { work_id?: unknown }).work_id;
+  if (typeof workId === 'string' && workId.length > 0) return;
+
+  throw new Error(
+    `Obra nao identificada: ${input.action_type} nao foi para a fila. ` +
+      'Volte para a lista de obras e abra a obra de novo.',
+  );
+}
+
 export async function enqueue(input: EnqueueOutboxInput): Promise<number> {
+  assertEnqueueable(input);
+
   const db = await getDb();
 
   const payload =

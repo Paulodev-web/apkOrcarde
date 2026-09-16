@@ -1,7 +1,9 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useLocalSearchParams } from 'expo-router';
+import {  } from 'expo-router';
+
+import { useWorkId } from '@/hooks/useWorkId';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { Users } from 'lucide-react-native';
 
@@ -23,12 +25,24 @@ type Row = {
 
 const TEAM_KEY = 'workTeamMembers';
 
+/**
+ * A query pedia colunas que a tabela nunca teve: `work_team.name`,
+ * `work_team.is_active` e `crew_members.name`. O PostgREST respondia 400
+ * ("column crew_members_1.name does not exist") e a aba Equipe ficava em erro
+ * permanente. Os nomes reais sao `crew_members.full_name` e, para "ainda no
+ * canteiro", `work_team.deallocated_at IS NULL` — nao existe flag is_active
+ * na alocacao, a saida e registrada por data.
+ *
+ * `crew_members` tambem e embed many-to-one (work_team.crew_member_id aponta
+ * para crew_members.id), entao vem como objeto e nao como lista; o codigo
+ * antigo iterava sobre ele.
+ */
 async function fetchTeamRows(workId: string): Promise<Row[]> {
   const { data, error } = await supabase
     .from('work_team')
-    .select('id, name, crew_members(id, name, role, is_active)')
+    .select('id, role_in_work, crew_members(id, full_name, role, is_active)')
     .eq('work_id', workId)
-    .eq('is_active', true);
+    .is('deallocated_at', null);
 
   // Falha de leitura não é "obra sem equipe". Lançando, o React Query mantém o
   // último resultado bom na tela, marca `isError` e tenta de novo sozinho; se
@@ -37,16 +51,23 @@ async function fetchTeamRows(workId: string): Promise<Row[]> {
   if (!data) return [];
 
   const rows: Row[] = [];
-  for (const team of data as {
+  for (const team of data as unknown as {
     id: string;
-    name: string;
-    crew_members: { id: string; name: string; role: string | null; is_active: boolean }[];
+    role_in_work: string | null;
+    crew_members: {
+      id: string;
+      full_name: string;
+      role: string | null;
+      is_active: boolean;
+    } | null;
   }[]) {
-    if (!team.crew_members) continue;
-    for (const m of team.crew_members) {
-      if (!m.is_active) continue;
-      rows.push({ id: m.id, name: m.name, role: m.role ?? 'Função não informada' });
-    }
+    const m = team.crew_members;
+    if (!m || !m.is_active) continue;
+    rows.push({
+      id: m.id,
+      name: m.full_name,
+      role: team.role_in_work ?? m.role ?? 'Função não informada',
+    });
   }
   return rows;
 }
@@ -55,7 +76,7 @@ async function fetchTeamRows(workId: string): Promise<Row[]> {
  * Equipe alocada na obra. Somente leitura — quem aloca e o engenheiro, no web.
  */
 export default function EquipeScreen() {
-  const { workId } = useLocalSearchParams<{ workId: string }>();
+  const workId = useWorkId();
   const id = typeof workId === 'string' ? workId : '';
 
   const query = useQuery({
